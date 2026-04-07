@@ -1,0 +1,17 @@
+{
+  "name": "Nexus Engine",
+  "short_name": "Nexus",
+  "description": "Motor de extração de dados financeiros de altíssima performance.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
