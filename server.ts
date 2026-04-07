@@ -10,7 +10,11 @@ async function startServer() {
   app.use(express.json());
 
   app.use((req, res, next) => {
-    console.log(`[REQUEST] ${req.method} ${req.url}`);
+    const log = `[REQUEST] ${new Date().toISOString()} ${req.method} ${req.url}\n`;
+    console.log(log.trim());
+    import('fs').then(fs => {
+      fs.appendFileSync('requests.log', log);
+    }).catch(console.error);
     next();
   });
 

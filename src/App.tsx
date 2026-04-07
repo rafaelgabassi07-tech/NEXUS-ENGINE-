@@ -563,7 +563,10 @@ function TestTab() {
       const tickerList = tickers.split(',').map(t => t.trim()).filter(Boolean);
       addLog(`Processando ${tickerList.length} ativos...`);
       
-      const res = await fetch('/api/scrape', {
+      const apiUrl = `${window.location.origin}/api/scrape?t=${Date.now()}`;
+      addLog(`Chamando API: ${apiUrl}`);
+
+      const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tickers: tickerList, type })
