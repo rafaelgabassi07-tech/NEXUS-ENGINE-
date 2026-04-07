@@ -253,37 +253,91 @@ export class NexusEngineUltra {
   private static async _executeFetch(
     url: string, labels: AssetLabel[], globalStart: number
   ): Promise<FetchSuccess> {
-    const labelSet = new Set(labels);
+    const labelSet = new Set(labels.map(l => l.toLowerCase()));
+    const labelMap: Record<string, AssetLabel> = {};
+    labels.forEach(l => labelMap[l.toLowerCase()] = l);
+
+    // Adicionar mapeamentos comuns
+    labelMap['dy'] = 'Dividend Yield';
+    labelMap['p/l'] = 'P/L';
+    labelMap['p/vp'] = 'P/VP';
+    labelMap['vpa'] = 'VPA';
+    labelMap['roe'] = 'ROE';
+    labelMap['roic'] = 'ROIC';
+    labelMap['lpa'] = 'LPA';
+    
+    const allLabels = new Set([...labelSet, 'dy']);
+
     const abortCtrl = new AbortController();
-    const timeoutId = setTimeout(() => abortCtrl.abort(), 8000);
+    const timeoutId = setTimeout(() => abortCtrl.abort(), 12000);
 
     const results: ResultMap = {};
     let foundCount = 0;
     let bytesProcessed = 0;
-    let lastLabel = '';
+    let lastLabel: AssetLabel | '' = '';
     let depth = 0;
     let buffer = '';
 
+    const ignoreTags = new Set(['script', 'style', 'option', 'title', 'meta', 'th', 'h1', 'h2', 'h3', 'p', 'footer', 'nav', 'header']);
+    let ignoreDepth = 0;
+
     const parser = new Parser({
-      ontext(t) {
-        if (depth > 0) { buffer += t; return; }
-        const txt = t.trim();
-        if (labelSet.has(txt as AssetLabel)) lastLabel = txt;
-      },
-      onopentag(_, attr) {
-        if (attr.class?.includes('value') || attr.class?.includes('v-value')) {
+      onopentag(name, attr) {
+        if (ignoreTags.has(name)) {
+          ignoreDepth++;
+          return;
+        }
+        if (ignoreDepth > 0) return;
+
+        const isValueClass = attr.class?.split(/\s+/).some(c => c === 'value' || c === 'v-value' || c === '_card-body');
+        
+        if (isValueClass) {
           if (depth === 0) buffer = '';
           depth++;
+        } else if (depth > 0) {
+          depth++;
+        }
+
+        // Check for title attribute in header spans
+        if (attr.title && allLabels.has(attr.title.toLowerCase())) {
+          lastLabel = labelMap[attr.title.toLowerCase()];
         }
       },
-      onclosetag() {
+      ontext(t) {
+        if (ignoreDepth > 0) return;
+        
+        if (depth > 0) {
+          buffer += t;
+          return;
+        }
+
+        const txt = t.trim();
+        if (!txt || txt.length > 50) return;
+
+        const cleanTxt = txt.endsWith(':') ? txt.slice(0, -1).trim() : txt;
+        const lowerTxt = cleanTxt.toLowerCase();
+        
+        if (allLabels.has(lowerTxt)) {
+          lastLabel = labelMap[lowerTxt];
+        }
+      },
+      onclosetag(name) {
+        if (ignoreTags.has(name)) {
+          ignoreDepth--;
+          return;
+        }
+        if (ignoreDepth > 0) return;
+
         if (depth > 0) {
           depth--;
           if (depth === 0 && lastLabel) {
-            results[lastLabel as AssetLabel] = normalizeBRNumber(buffer);
-            foundCount++;
-            lastLabel = '';
-            if (foundCount >= labels.length) abortCtrl.abort();
+            const normalized = normalizeBRNumber(buffer);
+            if (normalized && normalized !== '-' && normalized !== '0.00' && normalized !== '0,00%') {
+              results[lastLabel] = normalized;
+              foundCount++;
+              lastLabel = '';
+              if (foundCount >= labels.length) abortCtrl.abort();
+            }
           }
         }
       }
