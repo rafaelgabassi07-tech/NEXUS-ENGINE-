@@ -121,35 +121,36 @@ export class NexusEngineUltra {
     isRetry:   boolean   = false,
   ): Promise<FetchAtivoResult> {
 
+    const cleanTicker = ticker.trim().replace(/\.SA$/i, '').toUpperCase();
     const preset = NEXUS_PRESETS[type];
-    const url    = `${preset.url_base}${ticker.toLowerCase()}/`;
+    const url    = `${preset.url_base}${cleanTicker.toLowerCase()}/`;
 
     // 1. Cache HIT
     const cached = CACHE.get(url);
-    if (cached) return { ticker, ...cached, cacheStatus: 'HIT' };
+    if (cached) return { ticker: cleanTicker, ...cached, cacheStatus: 'HIT' };
 
     // 2. Deduplicação
     if (PENDING_REQUESTS.has(url)) {
       try {
         const result = await PENDING_REQUESTS.get(url)!;
-        return { ticker, ...result, cacheStatus: 'DEDUPE' };
+        return { ticker: cleanTicker, ...result, cacheStatus: 'DEDUPE' };
       } catch { /* segue para nova tentativa */ }
     }
 
-    const fetchPromise = this._executeFetchWithFallback(ticker, url, preset.labels, type);
+    const fetchPromise = this._executeFetchWithFallback(cleanTicker, url, preset.labels, type);
     PENDING_REQUESTS.set(url, fetchPromise);
 
     try {
       const result = await fetchPromise;
       CACHE.set(url, result);
-      return { ticker, ...result, cacheStatus: 'MISS' };
+      return { ticker: cleanTicker, ...result, cacheStatus: 'MISS' };
     } catch (error) {
       const err = error as Error;
       if (!isRetry && (err.message.includes('404') || err.message.includes('410'))) {
         const fallbackType: AssetType = type === 'ACAO' ? 'FII' : 'ACAO';
-        return this.fetchAtivo(ticker, fallbackType, true);
+        return this.fetchAtivo(cleanTicker, fallbackType, true);
       }
-      return { ticker, error: err.message, cacheStatus: 'ERROR' };
+      return { ticker: cleanTicker, error: err.message, cacheStatus: 'ERROR' };
     } finally {
       PENDING_REQUESTS.delete(url);
     }
@@ -291,7 +292,17 @@ export class NexusEngineUltra {
     try {
       const { statusCode, body } = await request(url, {
         dispatcher: HTTP_DISPATCHER,
-        headers: { 'User-Agent': AGENTS[0] },
+        headers: { 
+          'User-Agent': AGENTS[Math.floor(Math.random() * AGENTS.length)],
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Sec-Fetch-User': '?1',
+          'Cache-Control': 'max-age=0'
+        },
         signal: abortCtrl.signal,
       });
 
