@@ -9,6 +9,11 @@ async function startServer() {
 
   app.use(express.json());
 
+  app.use((req, res, next) => {
+    console.log(`[REQUEST] ${req.method} ${req.url}`);
+    next();
+  });
+
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
@@ -28,6 +33,16 @@ async function startServer() {
       console.error(`[API] Scrape error: ${error.message}`);
       res.status(500).json({ error: error.message });
     }
+  });
+
+  app.use("/api/*", (req, res) => {
+    console.warn(`[API 404] Route not found: ${req.method} ${req.originalUrl}`);
+    res.status(404).json({ 
+      error: "API Route not found", 
+      method: req.method, 
+      url: req.originalUrl,
+      availableRoutes: ["GET /api/health", "POST /api/scrape", "POST /api/clear-cache"]
+    });
   });
 
   app.post("/api/clear-cache", (req, res) => {

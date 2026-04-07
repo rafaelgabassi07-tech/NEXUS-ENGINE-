@@ -570,7 +570,8 @@ function TestTab() {
       });
       
       if (!res.ok) {
-        throw new Error(`Erro HTTP! status: ${res.status}`);
+        const text = await res.text();
+        throw new Error(`Erro HTTP! status: ${res.status} - ${text.slice(0, 100)}`);
       }
       
       const data = await res.json();
@@ -595,7 +596,7 @@ function TestTab() {
       className="space-y-5"
     >
       <div>
-        <h2 className="text-3xl font-bold tracking-tight font-display text-white">Testar Nexus Engine</h2>
+        <h2 className="text-3xl font-bold tracking-tight font-display text-white">Testar Nexus Engine <span className="text-xs font-normal text-slate-500 opacity-50">v1.0.2</span></h2>
         <p className="text-slate-400 mt-2">Execute testes de extração em tempo real contra a infraestrutura Nexus.</p>
       </div>
 
@@ -737,7 +738,7 @@ function TestTab() {
           className="p-4 bg-red-50 text-red-700 rounded-2xl border border-red-100 text-sm font-medium flex items-center gap-3"
         >
           <XCircle className="w-5 h-5 flex-shrink-0" />
-          {error}
+          <div className="break-all">{error}</div>
         </motion.div>
       )}
 
