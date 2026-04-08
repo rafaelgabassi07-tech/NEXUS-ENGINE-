@@ -36,6 +36,7 @@ export interface FetchMetrics {
 export interface FetchSuccess {
   results: ResultMap;
   metrics: FetchMetrics;
+  logs?: string[];
 }
 
 export interface AtivoBuscado extends FetchSuccess {
@@ -47,6 +48,7 @@ export interface AtivoErro {
   ticker:      string;
   error:       string;
   cacheStatus: 'ERROR';
+  logs?:       string[];
 }
 
 export type FetchAtivoResult = AtivoBuscado | AtivoErro;

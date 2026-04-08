@@ -12,7 +12,7 @@ export function TestTab() {
   const [logs, setLogs] = useState<string[]>([]);
 
   const addLog = (msg: string) => {
-    setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`].slice(-5));
+    setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`].slice(-100));
   };
 
   const handleTest = async () => {
@@ -46,6 +46,16 @@ export function TestTab() {
       if (data.error) throw new Error(data.error);
       
       addLog('Dados recebidos com sucesso.');
+      
+      // Process detailed logs from backend
+      if (data.results && Array.isArray(data.results)) {
+        data.results.forEach((res: any) => {
+          if (res.logs && Array.isArray(res.logs)) {
+            res.logs.forEach((logMsg: string) => addLog(logMsg));
+          }
+        });
+      }
+
       setResults(data.results);
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro');

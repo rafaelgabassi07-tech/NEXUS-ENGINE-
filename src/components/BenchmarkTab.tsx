@@ -29,7 +29,7 @@ export function BenchmarkTab() {
           
           <div className="space-y-4">
             <div className="flex items-center gap-4">
-              <span className="text-[10px] font-bold text-slate-500 w-16 uppercase tracking-widest">Legacy</span>
+              <span className="text-[10px] font-bold text-slate-500 w-16 uppercase tracking-widest">Legado</span>
               <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
                 <motion.div 
                   initial={{ width: 0 }}

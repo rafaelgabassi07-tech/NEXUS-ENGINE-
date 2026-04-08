@@ -18,7 +18,7 @@ export function ArchitectureTab() {
         </div>
         <div className="flex items-center gap-2 px-4 py-2 bg-blue-600 rounded-2xl shadow-lg">
           <Cpu className="w-4 h-4 text-white" />
-          <span className="text-[10px] font-bold text-white uppercase tracking-widest">v2.5 Architecture</span>
+          <span className="text-[10px] font-bold text-white uppercase tracking-widest">Arquitetura v2.5</span>
         </div>
       </div>
 

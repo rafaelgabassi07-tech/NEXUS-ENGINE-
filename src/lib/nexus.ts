@@ -88,35 +88,49 @@ export class NexusEngineUltra {
     const cleanTicker = ticker.trim().replace(/\.SA$/i, '').toUpperCase();
     const preset = NEXUS_PRESETS[type];
     const url = `${preset.url_base}/${cleanTicker.toLowerCase()}/`;
+    const logs: string[] = [];
+
+    const log = (m: string) => logs.push(`[${cleanTicker}] ${m}`);
 
     // 1. Cache HIT
     const cached = CACHE.get(url);
-    if (cached) return { ticker: cleanTicker, ...cached, cacheStatus: 'HIT' };
+    if (cached) {
+      log(`Cache HIT para ${url}`);
+      return { ticker: cleanTicker, ...cached, cacheStatus: 'HIT', logs };
+    }
 
     // 2. Deduplicação
     if (PENDING_REQUESTS.has(url)) {
+      log(`Deduplicação: Já existe requisição em curso para ${cleanTicker}`);
       try {
         const result = await PENDING_REQUESTS.get(url)!;
-        return { ticker: cleanTicker, ...result, cacheStatus: 'DEDUPE' };
+        return { ticker: cleanTicker, ...result, cacheStatus: 'DEDUPE', logs };
       } catch { /* erro na pendente, tenta nova */ }
     }
 
-    const fetchPromise = this._executeFetchWithFallback(cleanTicker, url, preset.labels, type);
+    log(`Iniciando busca profunda para ${cleanTicker} (${type})`);
+    const fetchPromise = this._executeFetchWithFallback(cleanTicker, url, preset.labels, type, log);
     PENDING_REQUESTS.set(url, fetchPromise);
 
     try {
       const result = await fetchPromise;
       CACHE.set(url, result);
-      return { ticker: cleanTicker, ...result, cacheStatus: 'MISS' };
+      return { ticker: cleanTicker, ...result, cacheStatus: 'MISS', logs };
     } catch (error) {
       const err = error as Error;
+      log(`FALHA CRÍTICA: ${err.message}`);
       console.error(`[NexusEngine] Falha em ${cleanTicker} (${type}): ${err.message}`);
 
       if (!isRetry && (err.message.includes('404') || err.message.includes('410'))) {
+        log(`404 detectado. Tentando fallback para outro tipo de ativo...`);
         const fallbackType: AssetType = type === 'ACAO' ? 'FII' : 'ACAO';
-        return this.fetchAtivo(cleanTicker, fallbackType, true);
+        const fallbackResult = await this.fetchAtivo(cleanTicker, fallbackType, true);
+        if ('logs' in fallbackResult && fallbackResult.logs) {
+          logs.push(...fallbackResult.logs);
+        }
+        return fallbackResult;
       }
-      return { ticker: cleanTicker, error: err.message, cacheStatus: 'ERROR' };
+      return { ticker: cleanTicker, error: err.message, cacheStatus: 'ERROR', logs };
     } finally {
       PENDING_REQUESTS.delete(url);
     }
@@ -127,6 +141,7 @@ export class NexusEngineUltra {
     url: string,
     labels: AssetLabel[],
     type: AssetType,
+    log: (m: string) => void
   ): Promise<FetchSuccess> {
     const startTime = performance.now();
     let finalResults: ResultMap = {};
@@ -134,33 +149,38 @@ export class NexusEngineUltra {
     let bytesTotal = 0;
 
     // --- FASE 1: HTML Scraper ---
+    log(`Fase 1: Disparando Scraper Zero-AST para ${url}`);
     try {
-      const htmlResult = await this._executeFetchWithRetry(url, labels, 2, startTime);
+      const htmlResult = await this._executeFetchWithRetry(url, labels, 2, startTime, log);
       finalResults = { ...htmlResult.results };
       bytesTotal = htmlResult.metrics.bytesProcessed;
       
       if (htmlResult.metrics.foundKeys.length > 0) {
         sourcesUsed.push('SAX Scraper (HTML)');
+        log(`Scraper encontrou ${htmlResult.metrics.foundKeys.length} indicadores.`);
       }
 
       if (htmlResult.metrics.foundKeys.length >= labels.length) {
+        log(`Scraper obteve todos os dados necessários. Early Abort acionado.`);
         return htmlResult; 
       }
     } catch (e) {
       if ((e as Error).message.includes('404')) throw e;
-      console.warn(`[NexusEngine] Scraper falhou para ${ticker}:`, (e as Error).message);
+      log(`Aviso: Scraper falhou ou incompleto: ${(e as Error).message}`);
     }
 
     // --- FASE 2: Yahoo Finance (Complemento) ---
+    log(`Fase 2: Consultando Yahoo Finance API para complementar dados...`);
     try {
       const yahooSymbol = `${ticker.toUpperCase()}.SA`;
+      log(`Yahoo: Buscando quote para ${yahooSymbol}`);
       const quote: any = await yf.quote(yahooSymbol);
-      let yahooAdded = false;
+      let yahooAdded = 0;
 
       const fill = (key: AssetLabel, val: any) => {
         if (!finalResults[key] && val != null) {
           finalResults[key] = typeof val === 'number' ? val.toFixed(2) : val;
-          yahooAdded = true;
+          yahooAdded++;
         }
       };
 
@@ -177,9 +197,14 @@ export class NexusEngineUltra {
           fill('Dividend Yield', (quote.trailingAnnualDividendYield * 100).toFixed(2) + '%');
       }
 
-      if (yahooAdded) sourcesUsed.push('Yahoo Finance API');
+      if (yahooAdded > 0) {
+        sourcesUsed.push('Yahoo Finance API');
+        log(`Yahoo Finance complementou ${yahooAdded} indicadores.`);
+      } else {
+        log(`Yahoo Finance não encontrou novos dados úteis.`);
+      }
     } catch (e) {
-      console.warn(`[NexusEngine] Yahoo falhou para ${ticker}:`, (e as Error).message);
+      log(`Aviso: Falha na API do Yahoo: ${(e as Error).message}`);
     }
 
     const foundKeys = Object.keys(finalResults) as AssetLabel[];
@@ -194,19 +219,21 @@ export class NexusEngineUltra {
         earlyAbort: foundKeys.length >= labels.length,
         successRate: foundKeys.length / labels.length,
         source: sourcesUsed.join(' + ') as DataSource,
-      },
+      }
     };
   }
 
   private static async _executeFetchWithRetry(
-    url: string, labels: AssetLabel[], retries: number, globalStart: number
+    url: string, labels: AssetLabel[], retries: number, globalStart: number, log: (m: string) => void
   ): Promise<FetchSuccess> {
     for (let i = 0; i < retries; i++) {
       try {
-        return await this._executeFetch(url, labels, globalStart);
+        if (i > 0) log(`Tentativa de re-conexão ${i}...`);
+        return await this._executeFetch(url, labels, globalStart, log);
       } catch (err) {
         const isTerminal = i === retries - 1 || (err as Error).message.includes('404');
         if (isTerminal) throw err;
+        log(`Erro na tentativa ${i + 1}: ${(err as Error).message}. Aguardando backoff...`);
         await delay(800 * (i + 1));
       }
     }
@@ -214,7 +241,7 @@ export class NexusEngineUltra {
   }
 
   private static async _executeFetch(
-    url: string, labels: AssetLabel[], globalStart: number
+    url: string, labels: AssetLabel[], globalStart: number, log: (m: string) => void
   ): Promise<FetchSuccess> {
     const labelMap: Record<string, AssetLabel> = {};
     labels.forEach(l => labelMap[l.toLowerCase()] = l);
@@ -277,8 +304,12 @@ export class NexusEngineUltra {
             if (normalized) {
               results[lastLabel] = normalized;
               foundCount++;
+              log(`Scraper: Encontrado ${lastLabel} = ${normalized}`);
               lastLabel = '';
-              if (foundCount >= labels.length) abortCtrl.abort();
+              if (foundCount >= labels.length) {
+                log(`Scraper: Todos os ${labels.length} indicadores encontrados. Abortando stream.`);
+                abortCtrl.abort();
+              }
             }
           }
         }
@@ -286,10 +317,12 @@ export class NexusEngineUltra {
     });
 
     try {
+      const userAgent = getRandomAgent();
+      log(`Conectando... UA: ${userAgent.slice(0, 30)}...`);
       const { statusCode, body } = await request(url, {
         dispatcher: HTTP_DISPATCHER,
         headers: { 
-          'User-Agent': getRandomAgent(),
+          'User-Agent': userAgent,
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
           'Accept-Language': 'pt-BR,pt;q=0.9',
           'Referer': 'https://investidor10.com.br/',
@@ -304,6 +337,7 @@ export class NexusEngineUltra {
         throw new Error(`HTTP ${statusCode}`);
       }
 
+      log(`Stream iniciado. Analisando bytes...`);
       for await (const chunk of body) {
         bytesProcessed += (chunk as Buffer).length;
         parser.write((chunk as Buffer).toString('utf-8'));

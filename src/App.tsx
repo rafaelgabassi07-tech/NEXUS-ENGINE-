@@ -17,8 +17,9 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [isCodeExpanded, setIsCodeExpanded] = useState(false);
+  const [activeSection, setActiveSection] = useState('');
 
-  // Add scroll listener for scroll-to-top button
+  // Add scroll listener for scroll-to-top button and active section
   useEffect(() => {
     const handleScroll = () => {
       if (window.scrollY > 400) {
@@ -27,8 +28,30 @@ export default function App() {
         setShowScrollTop(false);
       }
     };
+
+    const observerOptions = {
+      root: null,
+      rootMargin: '-80px 0px -50% 0px',
+      threshold: 0
+    };
+
+    const observerCallback = (entries: IntersectionObserverEntry[]) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          setActiveSection(`#${entry.target.id}`);
+        }
+      });
+    };
+
+    const observer = new IntersectionObserver(observerCallback, observerOptions);
+    const sections = document.querySelectorAll('section[id]');
+    sections.forEach(section => observer.observe(section));
+
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      sections.forEach(section => observer.unobserve(section));
+    };
   }, []);
 
   const scrollToTop = () => {
@@ -37,55 +60,86 @@ export default function App() {
 
   const handleNavClick = (e: MouseEvent<HTMLAnchorElement>, href: string) => {
     e.preventDefault();
+    setIsMobileMenuOpen(false);
+    
+    if (href === '#') {
+      scrollToTop();
+      return;
+    }
+
     const targetId = href.replace('#', '');
     const element = document.getElementById(targetId);
+    
     if (element) {
-      const offset = 80; // Height of fixed nav
-      const elementPosition = element.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - offset;
+      setTimeout(() => {
+        const offset = 80;
+        const bodyRect = document.body.getBoundingClientRect().top;
+        const elementRect = element.getBoundingClientRect().top;
+        const elementPosition = elementRect - bodyRect;
+        const offsetPosition = elementPosition - offset;
 
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth'
-      });
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: 'smooth'
+        });
+      }, 100);
     }
-    setIsMobileMenuOpen(false);
   };
 
   const navLinks = [
-    { href: '#benchmark', label: 'Benchmark' },
-    { href: '#use-cases', label: 'Casos de Uso' },
-    { href: '#features', label: 'Arquitetura' },
-    { href: '#source', label: 'Código' },
-    { href: '#playground', label: 'Playground' },
-    { href: '#api', label: 'Docs' },
-    { href: '#settings', label: 'Config' },
+    { href: '#benchmark', label: 'Benchmarks de Performance' },
+    { href: '#use-cases', label: 'Aplicações & Casos de Uso' },
+    { href: '#features', label: 'Arquitetura do Sistema' },
+    { href: '#source', label: 'Código Fonte & SDK' },
+    { href: '#playground', label: 'Playground de Extração' },
+    { href: '#api', label: 'Documentação da API' },
+    { href: '#settings', label: 'Configurações do Motor' },
   ];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500 selection:text-white overflow-x-hidden">
       {/* Top Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/50">
+      <nav className={cn(
+        "fixed top-0 left-0 right-0 z-50 transition-all duration-500 border-b",
+        showScrollTop 
+          ? "bg-slate-950/80 backdrop-blur-xl border-slate-800/50 py-2" 
+          : "bg-transparent border-transparent py-4"
+      )}>
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <a 
             href="#" 
-            onClick={(e) => { e.preventDefault(); scrollToTop(); }} 
+            onClick={(e) => handleNavClick(e, '#')} 
             className="flex items-center gap-3 group cursor-pointer"
           >
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-900/20 group-hover:scale-105 transition-transform">
-              <Activity className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
+              <Activity className="w-6 h-6 text-white" />
             </div>
-            <span className="text-lg font-bold tracking-tight font-display text-white group-hover:text-blue-400 transition-colors">Nexus Engine</span>
+            <div className="flex flex-col">
+              <span className="text-lg font-bold tracking-tight font-display text-white group-hover:text-blue-400 transition-colors">Nexus Engine</span>
+              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest -mt-1">Ultra v2.5</span>
+            </div>
           </a>
-          <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-400">
+          <div className="hidden md:flex items-center gap-1 text-sm font-medium">
             {navLinks.map(link => (
               <a 
                 key={link.href} 
                 href={link.href} 
                 onClick={(e) => handleNavClick(e, link.href)}
-                className="hover:text-white transition-colors"
+                className={cn(
+                  "px-4 py-2 rounded-full transition-all duration-300 relative group",
+                  activeSection === link.href 
+                    ? "text-white" 
+                    : "text-slate-400 hover:text-slate-200"
+                )}
               >
-                {link.label}
+                {activeSection === link.href && (
+                  <motion.div 
+                    layoutId="activeNav"
+                    className="absolute inset-0 bg-white/5 rounded-full border border-white/10"
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  />
+                )}
+                <span className="relative z-10">{link.label}</span>
               </a>
             ))}
           </div>
@@ -110,29 +164,41 @@ export default function App() {
         <AnimatePresence>
           {isMobileMenuOpen && (
             <motion.div 
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="md:hidden border-t border-slate-800/50 bg-slate-950/95 backdrop-blur-xl overflow-hidden"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="md:hidden border-t border-slate-800/50 bg-slate-950/98 backdrop-blur-2xl overflow-hidden shadow-2xl"
             >
-              <div className="px-6 py-4 flex flex-col gap-4">
-                {navLinks.map(link => (
-                  <a 
+              <div className="px-6 py-8 flex flex-col gap-2">
+                {navLinks.map((link, i) => (
+                  <motion.a 
                     key={link.href} 
                     href={link.href} 
-                    className="text-slate-300 hover:text-white font-medium text-lg py-2 border-b border-slate-800/50"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className={cn(
+                      "flex items-center justify-between px-4 py-4 rounded-2xl transition-all",
+                      activeSection === link.href 
+                        ? "bg-blue-600/10 text-blue-400 border border-blue-500/20" 
+                        : "text-slate-400 hover:text-white hover:bg-slate-900/50 border border-transparent"
+                    )}
                     onClick={(e) => handleNavClick(e, link.href)}
                   >
-                    {link.label}
-                  </a>
+                    <span className="font-bold text-lg">{link.label}</span>
+                    {activeSection === link.href && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.8)]" />}
+                  </motion.a>
                 ))}
-                <a 
+                <motion.a 
                   href="#playground" 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: navLinks.length * 0.05 }}
                   onClick={(e) => handleNavClick(e, '#playground')}
-                  className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-lg text-center font-bold transition-colors mt-2"
+                  className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-4 rounded-2xl text-center font-bold text-lg transition-all shadow-lg shadow-blue-900/20 mt-4 active:scale-95"
                 >
                   Testar Agora
-                </a>
+                </motion.a>
               </div>
             </motion.div>
           )}
@@ -197,7 +263,7 @@ export default function App() {
             </a>
             <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto px-6 py-4 bg-slate-900/50 hover:bg-slate-800 text-slate-300 rounded-xl font-bold text-lg transition-all border border-slate-800 hover:-translate-y-1 flex items-center justify-center gap-2 group">
               <svg className="w-5 h-5 fill-current group-hover:text-white transition-colors" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.041-1.412-4.041-1.412-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-              Ver no GitHub
+              GitHub
             </a>
           </motion.div>
         </section>
