@@ -29,7 +29,16 @@ import {
 // CONFIGURAÇÕES E CONSTANTES
 // ═══════════════════════════════════════════════════════════
 
-(yahooFinance as any).setGlobalConfig({ suppressNotices: ['yahooSurvey'] });
+// Defensive config for yahooFinance to handle different import behaviors
+const yf = (yahooFinance as any).default || yahooFinance;
+
+try {
+  if (yf && typeof yf.setGlobalConfig === 'function') {
+    yf.setGlobalConfig({ suppressNotices: ['yahooSurvey'] });
+  }
+} catch (e) {
+  console.warn('[NexusEngine] Could not set yahooFinance global config:', e);
+}
 
 const CACHE = new LRUCache<string, FetchSuccess>({
   max: 1000,
@@ -145,7 +154,7 @@ export class NexusEngineUltra {
     // --- FASE 2: Yahoo Finance (Complemento) ---
     try {
       const yahooSymbol = `${ticker.toUpperCase()}.SA`;
-      const quote: any = await yahooFinance.quote(yahooSymbol);
+      const quote: any = await yf.quote(yahooSymbol);
       let yahooAdded = false;
 
       const fill = (key: AssetLabel, val: any) => {
@@ -324,7 +333,7 @@ export class NexusEngineUltra {
   static async fetchHistoricoGrafico(ticker: string, period: ChartPeriod = '1y'): Promise<HistoricalQuote[]> {
     try {
       const yahooSymbol = `${ticker.toUpperCase()}.SA`;
-      const result: any = await yahooFinance.historical(yahooSymbol, {
+      const result: any = await yf.historical(yahooSymbol, {
         period1: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000), 
         period2: new Date(),
         interval: '1d'
@@ -338,7 +347,7 @@ export class NexusEngineUltra {
   static async fetchDividends(ticker: string): Promise<Dividend[]> {
     try {
       const yahooSymbol = `${ticker.toUpperCase()}.SA`;
-      const result: any = await (yahooFinance as any).dividends(yahooSymbol, {
+      const result: any = await yf.dividends(yahooSymbol, {
         period1: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000 * 5), // 5 anos
         period2: new Date(),
       });
@@ -350,7 +359,7 @@ export class NexusEngineUltra {
 
   static async searchTicker(query: string): Promise<any[]> {
     try {
-      const result: any = await yahooFinance.search(query);
+      const result: any = await yf.search(query);
       return result.quotes.filter((q: any) => q.exchange === 'SAO' || (q.symbol && q.symbol.endsWith('.SA')));
     } catch (e) {
       console.warn(`[NexusEngine] Busca falhou para ${query}:`, (e as Error).message);
