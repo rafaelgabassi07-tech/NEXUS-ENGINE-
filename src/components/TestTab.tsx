@@ -6,6 +6,7 @@ import { cn } from '../lib/utils';
 export function TestTab() {
   const [tickers, setTickers] = useState('PETR4, VALE3, MXRF11');
   const [type, setType] = useState<'ACAO' | 'FII'>('ACAO');
+  const [includeNews, setIncludeNews] = useState(false);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
   const [error, setError] = useState('');
@@ -23,6 +24,7 @@ export function TestTab() {
     
     addLog(`Iniciando extração para: ${tickers}`);
     addLog(`Tipo definido: ${type}`);
+    addLog(`Buscar notícias: ${includeNews ? 'SIM' : 'NÃO'}`);
     
     try {
       const tickerList = tickers.split(',').map(t => t.trim()).filter(Boolean);
@@ -34,7 +36,7 @@ export function TestTab() {
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tickers: tickerList, type })
+        body: JSON.stringify({ tickers: tickerList, type, includeNews })
       });
       
       if (!res.ok) {
@@ -149,6 +151,28 @@ export function TestTab() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div>
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={includeNews}
+                    onChange={(e) => setIncludeNews(e.target.checked)}
+                    className="sr-only"
+                  />
+                  <div className={cn(
+                    "w-10 h-5 rounded-full transition-colors duration-300",
+                    includeNews ? "bg-blue-600" : "bg-slate-800"
+                  )} />
+                  <div className={cn(
+                    "absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform duration-300",
+                    includeNews ? "translate-x-5" : "translate-x-0"
+                  )} />
+                </div>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest group-hover:text-slate-300 transition-colors">Buscar Notícias (Google News)</span>
+              </label>
             </div>
 
             <button
@@ -285,6 +309,32 @@ export function TestTab() {
                         </div>
                       ))}
                     </div>
+
+                    {res.news && res.news.length > 0 && (
+                      <div className="space-y-3 mt-4">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                          <Globe className="w-3 h-3 text-blue-400" />
+                          Últimas Notícias
+                        </p>
+                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-700">
+                          {res.news.map((item: any, i: number) => (
+                            <a 
+                              key={i} 
+                              href={item.link} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="block p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-blue-500/30 hover:bg-slate-800 transition-all group"
+                            >
+                              <p className="text-xs font-bold text-slate-200 group-hover:text-blue-400 transition-colors line-clamp-2">{item.title}</p>
+                              <div className="flex items-center justify-between mt-2">
+                                <span className="text-[8px] text-slate-500 font-bold uppercase">{item.source}</span>
+                                <span className="text-[8px] text-slate-600">{new Date(item.pubDate).toLocaleDateString()}</span>
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     
                     <div className="flex flex-wrap gap-3 text-[9px] text-slate-400 font-bold uppercase tracking-widest">
                       <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 rounded-lg">

@@ -9,14 +9,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log(`[API] Scrape request received: ${JSON.stringify(req.body)}`);
   
   try {
-    const { tickers, type } = req.body;
+    const { tickers, type, includeNews } = req.body;
     
     if (!tickers || !Array.isArray(tickers) || !type) {
       console.warn(`[API] Invalid request body: ${JSON.stringify(req.body)}`);
       return res.status(400).json({ error: "Invalid request body" });
     }
     
-    const results = await runNexusBatch(tickers, type);
+    const results = await runNexusBatch(tickers, type, 5, includeNews);
     console.log(`[API] Scrape completed for ${tickers.length} tickers`);
     
     res.status(200).json({ results });

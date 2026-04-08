@@ -1,6 +1,13 @@
 export type AssetType = 'ACAO' | 'FII';
 export type CacheStatus = 'HIT' | 'MISS' | 'DEDUPE' | 'ERROR';
-export type DataSource = 'Yahoo Finance API' | 'SAX Scraper (HTML)' | 'SAX Scraper (HTML) + Yahoo Finance API';
+export type DataSource = 'Yahoo Finance API' | 'SAX Scraper (HTML)' | 'SAX Scraper (HTML) + Yahoo Finance API' | 'Google News RSS';
+
+export interface NewsItem {
+  title: string;
+  link: string;
+  pubDate: Date;
+  source: string;
+}
 
 export type AcaoLabel = 'P/L' | 'Dividend Yield' | 'P/VP' | 'VPA' | 'ROE' | 'ROIC' | 'Margem Líquida' | 'Margem Bruta' | 'Margem EBIT' | 'EV/EBITDA' | 'Dívida Líquida / Patrimônio' | 'Dívida Líquida / EBITDA' | 'CAGR Receitas 5 Anos' | 'LPA' | 'PEG Ratio' | 'P/EBIT' | 'P/Ativo' | 'PSR' | 'Giro Ativos' | 'Dívida Bruta / Patrimônio' | 'Preço Atual' | 'Variação (24h)' | 'Setor' | 'Subsetor' | 'Segmento';
 export type FiiLabel = 'Dividend Yield' | 'P/VP' | 'Valor Patrimonial' | 'Liquidez Diária' | 'Último Rendimento' | 'Vacância Física' | 'Vacância Financeira' | 'Quantidade Ativos' | 'Patrimônio Líquido' | 'Valor de Mercado' | 'P/Ativo' | 'Preço Atual' | 'Variação (24h)' | 'Segmento';
@@ -42,6 +49,7 @@ export interface FetchSuccess {
 export interface AtivoBuscado extends FetchSuccess {
   ticker:      string;
   cacheStatus: CacheStatus;
+  news?:       NewsItem[];
 }
 
 export interface AtivoErro {

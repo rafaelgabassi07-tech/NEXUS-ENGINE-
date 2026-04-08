@@ -14,7 +14,8 @@ import {
   ChartPeriod,
   HistoricalQuote,
   Dividend,
-  DataSource
+  DataSource,
+  NewsItem
 } from './nexus/types.js';
 
 import { 
@@ -94,6 +95,7 @@ export class NexusEngineUltra {
     ticker: string,
     type: AssetType = 'ACAO',
     isRetry: boolean = false,
+    includeNews: boolean = false
   ): Promise<FetchAtivoResult> {
     const cleanTicker = ticker.trim().replace(/\.SA$/i, '').toUpperCase();
     const cacheKey = `${cleanTicker}-${type}`;
@@ -102,8 +104,12 @@ export class NexusEngineUltra {
     if (!isRetry) {
       const cached = this.memoryCache.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < this.CACHE_TTL_MS) {
+        let data = { ...cached.data };
+        if (includeNews && data.cacheStatus !== 'ERROR' && !data.news) {
+          data.news = await this.fetchNews(cleanTicker);
+        }
         return { 
-          ...cached.data, 
+          ...data, 
           cacheStatus: 'HIT', 
           logs: [`[${cleanTicker}] Retornado do cache em memória (Warm Start) em 0ms`] 
         } as FetchAtivoResult;
@@ -121,7 +127,13 @@ export class NexusEngineUltra {
 
     try {
       const result = await fetchPromise;
-      const finalData = { ticker: cleanTicker, ...result, cacheStatus: 'MISS' as const, logs };
+      let news: NewsItem[] | undefined = undefined;
+      if (includeNews) {
+        log(`Buscando notícias recentes via Google News RSS...`);
+        news = await this.fetchNews(cleanTicker);
+      }
+
+      const finalData = { ticker: cleanTicker, ...result, cacheStatus: 'MISS' as const, logs, news };
       
       // Save to Warm Start Cache
       this.memoryCache.set(cacheKey, { data: finalData, timestamp: Date.now() });
@@ -135,7 +147,7 @@ export class NexusEngineUltra {
       if (!isRetry && (err.message.includes('404') || err.message.includes('410') || err.message.includes('Falha total'))) {
         log(`Falha primária detectada. Tentando fallback para outro tipo de ativo...`);
         const fallbackType: AssetType = type === 'ACAO' ? 'FII' : 'ACAO';
-        const fallbackResult = await this.fetchAtivo(cleanTicker, fallbackType, true);
+        const fallbackResult = await this.fetchAtivo(cleanTicker, fallbackType, true, includeNews);
         if ('logs' in fallbackResult && fallbackResult.logs) {
           logs.push(...fallbackResult.logs);
         }
@@ -479,6 +491,77 @@ export class NexusEngineUltra {
       return [];
     }
   }
+
+  static async fetchNews(ticker: string): Promise<NewsItem[]> {
+    const cleanTicker = ticker.trim().replace(/\.SA$/i, '').toUpperCase();
+    const googleNewsUrl = `https://news.google.com/rss/search?q=${cleanTicker}+stock+B3&hl=pt-BR&gl=BR&ceid=BR:pt-419`;
+    
+    try {
+      const response = await fetch(googleNewsUrl, {
+        headers: { 'User-Agent': getRandomAgent() }
+      });
+      
+      if (!response.ok) throw new Error(`Google News HTTP ${response.status}`);
+      
+      const xml = await response.text();
+      const news: NewsItem[] = [];
+      let currentItem: Partial<NewsItem> | null = null;
+      let currentTag: string = '';
+
+      const parser = new Parser({
+        onopentag(name) {
+          if (name === 'item') currentItem = {};
+          currentTag = name;
+        },
+        ontext(text) {
+          if (!currentItem) return;
+          if (currentTag === 'title') currentItem.title = (currentItem.title || '') + text;
+          if (currentTag === 'link') currentItem.link = (currentItem.link || '') + text;
+          if (currentTag === 'pubdate') currentItem.pubDate = new Date((currentItem.pubDate?.toString() || '') + text);
+          if (currentTag === 'source') currentItem.source = (currentItem.source || '') + text;
+        },
+        onclosetag(name) {
+          if (name === 'item' && currentItem && currentItem.title && currentItem.link) {
+            news.push(currentItem as NewsItem);
+            currentItem = null;
+          }
+          currentTag = '';
+        }
+      }, { xmlMode: true });
+
+      parser.write(xml);
+      parser.end();
+
+      if (news.length > 0) return news;
+      
+      // Fallback to Yahoo Finance News if Google News RSS is empty
+      const yfResult = await yf.search(cleanTicker);
+      if (yfResult.news && yfResult.news.length > 0) {
+        return yfResult.news.map((n: any) => ({
+          title: n.title,
+          link: n.link,
+          pubDate: new Date(n.providerPublishTime * 1000),
+          source: n.publisher
+        }));
+      }
+
+      return [];
+    } catch (e) {
+      console.warn(`[NexusEngine] fetchNews falhou para ${ticker}:`, (e as Error).message);
+      // Final fallback to Yahoo
+      try {
+        const yfResult = await yf.search(cleanTicker);
+        return (yfResult.news || []).map((n: any) => ({
+          title: n.title,
+          link: n.link,
+          pubDate: new Date(n.providerPublishTime * 1000),
+          source: n.publisher
+        }));
+      } catch (err) {
+        return [];
+      }
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -501,7 +584,7 @@ export async function runWithLimit<T>(tasks: Task<T>[], limit: number = 5): Prom
   return results;
 }
 
-export async function runNexusBatch(tickers: string[], type: AssetType = 'ACAO', limit = 5): Promise<FetchAtivoResult[]> {
-  const tasks = tickers.map(t => () => NexusEngineUltra.fetchAtivo(t, type));
+export async function runNexusBatch(tickers: string[], type: AssetType = 'ACAO', limit = 5, includeNews = false): Promise<FetchAtivoResult[]> {
+  const tasks = tickers.map(t => () => NexusEngineUltra.fetchAtivo(t, type, false, includeNews));
   return runWithLimit(tasks, limit);
 }
