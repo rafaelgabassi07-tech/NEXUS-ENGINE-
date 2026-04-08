@@ -17,29 +17,15 @@ function Header() {
     setIsMobileMenuOpen(false);
     
     if (href.startsWith('#')) {
-      const targetId = href.replace('#', '');
-      
-      const scrollToElement = () => {
+      if (location.pathname !== '/') {
+        navigate('/' + href);
+      } else {
+        const targetId = href.replace('#', '');
         const element = document.getElementById(targetId);
         if (element) {
-          const offset = 96; // Header height + padding
-          const bodyRect = document.body.getBoundingClientRect().top;
-          const elementRect = element.getBoundingClientRect().top;
-          const elementPosition = elementRect - bodyRect;
-          const offsetPosition = elementPosition - offset;
-
-          window.scrollTo({
-            top: offsetPosition,
-            behavior: 'smooth'
-          });
+          element.scrollIntoView({ behavior: 'smooth' });
+          window.history.pushState(null, '', href);
         }
-      };
-
-      if (location.pathname !== '/') {
-        navigate('/');
-        setTimeout(scrollToElement, 100);
-      } else {
-        scrollToElement();
       }
     } else {
       navigate(href);
