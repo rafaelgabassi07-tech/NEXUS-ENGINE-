@@ -60,8 +60,9 @@ const NEXUS_PRESETS: Record<AssetType, AssetPreset> = {
     labels: [
       'P/L', 'Dividend Yield', 'P/VP', 'VPA', 'ROE', 'ROIC', 
       'Margem Líquida', 'Margem Bruta', 'Margem EBIT', 'EV/EBITDA', 
-      'Dívida Líquida / Patrimônio', 'CAGR Receitas 5 Anos', 'LPA', 'PEG Ratio',
-      'P/EBIT', 'P/Ativo', 'PSR', 'Giro Ativos', 'Dívida Bruta / Patrimônio'
+      'Dívida Líquida / Patrimônio', 'Dívida Líquida / EBITDA', 'CAGR Receitas 5 Anos', 'LPA', 'PEG Ratio',
+      'P/EBIT', 'P/Ativo', 'PSR', 'Giro Ativos', 'Dívida Bruta / Patrimônio',
+      'Preço Atual', 'Variação (24h)', 'Setor', 'Subsetor', 'Segmento'
     ],
   },
   FII: {
@@ -69,7 +70,8 @@ const NEXUS_PRESETS: Record<AssetType, AssetPreset> = {
     labels: [
       'Dividend Yield', 'P/VP', 'Valor Patrimonial', 'Liquidez Diária', 
       'Último Rendimento', 'Vacância Física', 'Vacância Financeira', 'Quantidade Ativos',
-      'Patrimônio Líquido', 'Valor de Mercado', 'P/Ativo'
+      'Patrimônio Líquido', 'Valor de Mercado', 'P/Ativo',
+      'Preço Atual', 'Variação (24h)', 'Segmento'
     ],
   },
 } as const;
@@ -200,18 +202,24 @@ export class NexusEngineUltra {
         fill('P/VP', quote.priceToBook);
         fill('VPA', quote.bookValue);
         fill('LPA', quote.epsTrailingTwelveMonths);
+        fill('Preço Atual', quote.regularMarketPrice);
+        if (quote.regularMarketChangePercent) fill('Variação (24h)', quote.regularMarketChangePercent.toFixed(2) + '%');
         
         // Advanced fallbacks for ACAO
         if (quote.profitMargins) fill('Margem Líquida', (quote.profitMargins * 100).toFixed(2) + '%');
         if (quote.returnOnEquity) fill('ROE', (quote.returnOnEquity * 100).toFixed(2) + '%');
         if (quote.returnOnAssets) fill('ROIC', (quote.returnOnAssets * 100).toFixed(2) + '%'); // ROA as proxy
         if (quote.revenuePerShare && quote.regularMarketPrice) fill('PSR', quote.regularMarketPrice / quote.revenuePerShare);
+        if (quote.enterpriseToEbitda) fill('EV/EBITDA', quote.enterpriseToEbitda);
 
         if (quote.trailingAnnualDividendYield) 
           fill('Dividend Yield', (quote.trailingAnnualDividendYield * 100).toFixed(2) + '%');
       } else {
         fill('P/VP', quote.priceToBook);
         fill('Valor Patrimonial', quote.bookValue);
+        fill('Preço Atual', quote.regularMarketPrice);
+        if (quote.regularMarketChangePercent) fill('Variação (24h)', quote.regularMarketChangePercent.toFixed(2) + '%');
+        
         if (quote.trailingAnnualDividendYield)
           fill('Dividend Yield', (quote.trailingAnnualDividendYield * 100).toFixed(2) + '%');
         
@@ -275,6 +283,17 @@ export class NexusEngineUltra {
     labelMap['p/l'] = 'P/L';
     labelMap['p/vp'] = 'P/VP';
     labelMap['vpa'] = 'VPA';
+    labelMap['cotação'] = 'Preço Atual';
+    labelMap['cotacao'] = 'Preço Atual';
+    labelMap['variação'] = 'Variação (24h)';
+    labelMap['variacao'] = 'Variação (24h)';
+    labelMap['setor de atuação'] = 'Setor';
+    labelMap['subsetor de atuação'] = 'Subsetor';
+    labelMap['segmento de atuação'] = 'Segmento';
+    labelMap['segmento'] = 'Segmento';
+    labelMap['div. líq. / ebitda'] = 'Dívida Líquida / EBITDA';
+    labelMap['div. liq. / ebitda'] = 'Dívida Líquida / EBITDA';
+    labelMap['ev / ebitda'] = 'EV/EBITDA';
     
     const allLabels = new Set(Object.keys(labelMap));
     const abortCtrl = new AbortController();

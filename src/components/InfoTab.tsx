@@ -109,6 +109,14 @@ export default async function handler(req, res) {
               <p className="text-xs text-emerald-400 font-bold mb-1">htmlparser2</p>
               <p className="text-[10px] text-slate-500 leading-relaxed">Parser HTML/XML baseado em streams (SAX), essencial para o Zero-AST e Early Abort.</p>
             </div>
+            <div className="p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+              <p className="text-xs text-indigo-400 font-bold mb-1">yahoo-finance2</p>
+              <p className="text-[10px] text-slate-500 leading-relaxed">Fallback inteligente para garantir 100% de disponibilidade dos dados.</p>
+            </div>
+            <div className="p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+              <p className="text-xs text-orange-400 font-bold mb-1">Warm Start Cache</p>
+              <p className="text-[10px] text-slate-500 leading-relaxed">Cache em memória para respostas instantâneas em requisições repetidas.</p>
+            </div>
           </div>
         </div>
 
@@ -202,6 +210,9 @@ export default async function handler(req, res) {
               <div className="text-[10px] text-slate-500 leading-relaxed flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                 <strong className="text-slate-400">type</strong> (obrigatório): <code>ACAO</code> ou <code>FII</code>.
+              </div>
+              <div className="text-[10px] text-blue-400/60 leading-relaxed mt-4 italic">
+                * O endpoint é real e funcional. Use ferramentas como Postman ou cURL para testar via POST.
               </div>
             </div>
           </div>

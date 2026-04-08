@@ -75,9 +75,9 @@ export default function HomePage() {
     const element = document.getElementById(targetId);
     
     if (element) {
-      const headerOffset = 80;
+      const headerOffset = 100;
       const elementPosition = element.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      const offsetPosition = elementPosition + window.scrollY - headerOffset;
       window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
       try { window.history.pushState(null, '', href); } catch (err) {}
     }

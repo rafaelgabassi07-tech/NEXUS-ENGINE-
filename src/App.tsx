@@ -17,26 +17,25 @@ function Header() {
     setIsMobileMenuOpen(false);
     
     if (href.startsWith('#')) {
+      const targetId = href.replace('#', '');
       if (location.pathname !== '/') {
         navigate('/');
         setTimeout(() => {
-          const targetId = href.replace('#', '');
           const element = document.getElementById(targetId);
           if (element) {
-            const headerOffset = 80;
+            const headerOffset = 100;
             const elementPosition = element.getBoundingClientRect().top;
-            const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+            const offsetPosition = elementPosition + window.scrollY - headerOffset;
             window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
             try { window.history.pushState(null, '', href); } catch (err) {}
           }
-        }, 300);
+        }, 500);
       } else {
-        const targetId = href.replace('#', '');
         const element = document.getElementById(targetId);
         if (element) {
-          const headerOffset = 80;
+          const headerOffset = 100;
           const elementPosition = element.getBoundingClientRect().top;
-          const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+          const offsetPosition = elementPosition + window.scrollY - headerOffset;
           window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
           try { window.history.pushState(null, '', href); } catch (err) {}
         }
