@@ -36,12 +36,13 @@ export default function App() {
   };
 
   const navLinks = [
-    { href: '#features', label: 'Features' },
     { href: '#benchmark', label: 'Benchmark' },
-    { href: '#source', label: 'Source' },
+    { href: '#use-cases', label: 'Casos de Uso' },
+    { href: '#features', label: 'Arquitetura' },
+    { href: '#source', label: 'Código' },
     { href: '#playground', label: 'Playground' },
-    { href: '#api', label: 'API & Docs' },
-    { href: '#settings', label: 'Settings' },
+    { href: '#api', label: 'Docs' },
+    { href: '#settings', label: 'Config' },
   ];
 
   return (
@@ -172,7 +173,7 @@ export default function App() {
         </section>
 
         {/* Benchmark Section */}
-        <section id="benchmark" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50">
+        <section id="benchmark" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 scroll-mt-20">
           <div className="mb-12 text-center">
             <h2 className="text-3xl font-bold font-display text-white mb-4">Performance Incomparável</h2>
             <p className="text-slate-400 max-w-2xl mx-auto">Métricas reais extraídas do núcleo da engine comparando a arquitetura legada com o novo Nexus Core.</p>
@@ -181,7 +182,7 @@ export default function App() {
         </section>
 
         {/* Statistics Section */}
-        <section id="stats" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 relative">
+        <section id="stats" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 relative scroll-mt-20">
           <div className="absolute inset-0 bg-blue-500/5 blur-[100px] rounded-full pointer-events-none"></div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 relative z-10">
             {[
@@ -214,15 +215,21 @@ export default function App() {
         </section>
 
         {/* Use Cases Section */}
-        <UseCasesSection />
+        <section id="use-cases" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 scroll-mt-20">
+          <div className="mb-12 text-center">
+            <h2 className="text-3xl font-bold font-display text-white mb-4">Casos de Uso</h2>
+            <p className="text-slate-400 max-w-2xl mx-auto">Onde a performance extrema do Nexus Engine faz a diferença no mundo real.</p>
+          </div>
+          <UseCasesSection />
+        </section>
 
         {/* Architecture Section */}
-        <section id="features" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 bg-slate-900/20">
+        <section id="features" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 bg-slate-900/20 scroll-mt-20">
           <ArchitectureTab />
         </section>
 
         {/* Source Code Section */}
-        <section id="source" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50">
+        <section id="source" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 scroll-mt-20">
           <div className="mb-12">
             <h2 className="text-3xl font-bold font-display text-white mb-4">Código Fonte do Núcleo</h2>
             <p className="text-slate-400 max-w-2xl">O Nexus Engine é open-source. Abaixo está a implementação principal do motor de extração híbrido.</p>
@@ -279,7 +286,7 @@ export default function App() {
         </section>
 
         {/* Playground Section */}
-        <section id="playground" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50">
+        <section id="playground" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 scroll-mt-20">
           <div className="mb-12 text-center">
             <h2 className="text-3xl font-bold font-display text-white mb-4">Playground Interativo</h2>
             <p className="text-slate-400 max-w-2xl mx-auto">Teste a velocidade e resiliência do Nexus Engine em tempo real.</p>
@@ -288,12 +295,12 @@ export default function App() {
         </section>
 
         {/* API & Docs Section */}
-        <section id="api" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 bg-slate-900/20">
+        <section id="api" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 bg-slate-900/20 scroll-mt-20">
           <InfoTab nexusCode={nexusCode} />
         </section>
 
         {/* Settings Section */}
-        <section id="settings" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50">
+        <section id="settings" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 scroll-mt-20">
           <SettingsTab />
         </section>
 
