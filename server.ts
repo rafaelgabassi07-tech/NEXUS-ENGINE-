@@ -1,7 +1,7 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import { runNexusBatch, NexusEngineUltra } from "./src/lib/nexus";
+import { runNexusBatch, NexusEngineUltra } from "./src/lib/nexus-core";
 
 async function startServer() {
   const app = express();

@@ -104,7 +104,7 @@ export class NexusEngineUltra {
           ...cached.data, 
           cacheStatus: 'HIT', 
           logs: [`[${cleanTicker}] Retornado do cache em memória (Warm Start) em 0ms`] 
-        };
+        } as FetchAtivoResult;
       }
     }
 

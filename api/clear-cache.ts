@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { NexusEngineUltra } from '../src/lib/nexus';
+import { NexusEngineUltra } from '../src/lib/nexus-core';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {

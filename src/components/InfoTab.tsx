@@ -25,7 +25,7 @@ export function InfoTab({ nexusCode }: InfoTabProps) {
     a.click();
   };
 
-  const codeExample = `import { NexusEngineUltra, runNexusBatch } from './nexus-engine';
+  const codeExample = `import { NexusEngineUltra, runNexusBatch } from './nexus-core';
 
 // 1. Busca um único ativo (Fundamentos)
 const data = await NexusEngineUltra.fetchAtivo('PETR4', 'ACAO');
@@ -40,7 +40,7 @@ const tickers = ['PETR4', 'VALE3', 'MXRF11', 'ITUB4', 'BBDC4'];
 const batch = await runNexusBatch(tickers, 'ACAO', 100);
 console.log("Processados " + batch.length + " ativos");`;
 
-  const serverlessExample = `import { runNexusBatch } from '../src/lib/nexus';
+  const serverlessExample = `import { runNexusBatch } from '../src/lib/nexus-core';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

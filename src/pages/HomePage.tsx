@@ -2,7 +2,7 @@ import { useState, useEffect, type MouseEvent } from 'react';
 import { Activity, Play, Zap, Code2, Globe, BarChart3, ChevronDown, ChevronUp, Copy, ArrowUp } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import nexusCode from '../lib/nexus.ts?raw';
+import nexusCode from '../lib/nexus-core.ts?raw';
 import { ArchitectureTab } from '../components/ArchitectureTab';
 import { InfoTab } from '../components/InfoTab';
 import { BenchmarkTab } from '../components/BenchmarkTab';
