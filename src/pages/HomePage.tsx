@@ -75,12 +75,11 @@ export default function HomePage() {
     const element = document.getElementById(targetId);
     
     if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
-      try {
-        window.history.pushState(null, '', href);
-      } catch (err) {
-        // Ignore pushState errors in iframes
-      }
+      const headerOffset = 80;
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+      try { window.history.pushState(null, '', href); } catch (err) {}
     }
   };
 
@@ -89,12 +88,12 @@ export default function HomePage() {
       {/* Decorative Grid Background */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[500px] bg-blue-500/10 blur-[120px] rounded-full"></div>
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1920px] h-[500px] bg-blue-500/10 blur-[120px] rounded-full"></div>
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-20"></div>
       </div>
 
       {/* Hero Section */}
-      <section className="max-w-7xl mx-auto px-6 pt-20 pb-32 text-center relative z-10">
+      <section className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 pt-20 pb-32 text-center relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -149,7 +148,7 @@ export default function HomePage() {
       </section>
 
       {/* Benchmark Section */}
-      <section id="benchmark" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 scroll-mt-32">
+      <section id="benchmark" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-24 border-t border-slate-800/50 scroll-mt-32">
         <div className="mb-12 text-center">
           <h2 className="text-3xl font-bold font-display text-white mb-4">Performance Incomparável</h2>
           <p className="text-slate-400 max-w-2xl mx-auto">Métricas reais extraídas do núcleo da engine comparando a arquitetura legada com o novo Nexus Core.</p>
@@ -158,7 +157,7 @@ export default function HomePage() {
       </section>
 
       {/* Statistics Section */}
-      <section id="stats" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 relative scroll-mt-32">
+      <section id="stats" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-24 border-t border-slate-800/50 relative scroll-mt-32">
         <div className="absolute inset-0 bg-blue-500/5 blur-[100px] rounded-full pointer-events-none"></div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 relative z-10">
           {[
@@ -191,7 +190,7 @@ export default function HomePage() {
       </section>
 
       {/* Use Cases Section */}
-      <section id="use-cases" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 scroll-mt-32">
+      <section id="use-cases" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-24 border-t border-slate-800/50 scroll-mt-32">
         <div className="mb-12 text-center">
           <h2 className="text-3xl font-bold font-display text-white mb-4">Casos de Uso</h2>
           <p className="text-slate-400 max-w-2xl mx-auto">Onde a performance extrema do Nexus Engine faz a diferença no mundo real.</p>
@@ -200,12 +199,12 @@ export default function HomePage() {
       </section>
 
       {/* Architecture Section */}
-      <section id="features" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 bg-slate-900/20 scroll-mt-32">
+      <section id="features" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-24 border-t border-slate-800/50 bg-slate-900/20 scroll-mt-32">
         <ArchitectureTab />
       </section>
 
       {/* Source Code Section */}
-      <section id="source" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 scroll-mt-32">
+      <section id="source" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-24 border-t border-slate-800/50 scroll-mt-32">
         <div className="mb-12">
           <h2 className="text-3xl font-bold font-display text-white mb-4">Código Fonte do Núcleo</h2>
           <p className="text-slate-400 max-w-2xl">O Nexus Engine é open-source. Abaixo está a implementação principal do motor de extração híbrido.</p>
@@ -262,7 +261,7 @@ export default function HomePage() {
       </section>
 
       {/* Playground Section */}
-      <section id="playground" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 scroll-mt-32">
+      <section id="playground" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-24 border-t border-slate-800/50 scroll-mt-32">
         <div className="mb-12 text-center">
           <h2 className="text-3xl font-bold font-display text-white mb-4">Playground Interativo</h2>
           <p className="text-slate-400 max-w-2xl mx-auto">Teste a velocidade e resiliência do Nexus Engine em tempo real.</p>
@@ -271,7 +270,7 @@ export default function HomePage() {
       </section>
 
       {/* API & Docs Section */}
-      <section id="api" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 bg-slate-900/20 scroll-mt-32">
+      <section id="api" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-24 border-t border-slate-800/50 bg-slate-900/20 scroll-mt-32">
         <InfoTab nexusCode={nexusCode} />
       </section>
 

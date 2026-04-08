@@ -31,8 +31,8 @@ export function ArchitectureTab() {
             <div className="space-y-8">
               <BenchmarkBar 
                 label="Uso de Memória (RAM)" 
-                legacy="450MB" 
-                nexus="42MB" 
+                legacy="450" 
+                nexus="42" 
                 legacyPercent={90} 
                 nexusPercent={10} 
                 unit="MB"
@@ -40,8 +40,8 @@ export function ArchitectureTab() {
               />
               <BenchmarkBar 
                 label="Latência de Rede (p95)" 
-                legacy="1.2s" 
-                nexus="0.3s" 
+                legacy="1.2" 
+                nexus="0.3" 
                 legacyPercent={100} 
                 nexusPercent={25} 
                 unit="s"
@@ -58,8 +58,8 @@ export function ArchitectureTab() {
               />
               <BenchmarkBar 
                 label="Tempo de Handshake TCP" 
-                legacy="45ms" 
-                nexus="0ms" 
+                legacy="45" 
+                nexus="0" 
                 legacyPercent={100} 
                 nexusPercent={2} 
                 unit="ms"
@@ -69,8 +69,8 @@ export function ArchitectureTab() {
             <div className="space-y-8">
               <BenchmarkBar 
                 label="Consumo de Banda" 
-                legacy="100%" 
-                nexus="15%" 
+                legacy="100" 
+                nexus="15" 
                 legacyPercent={100} 
                 nexusPercent={15} 
                 unit="%"
@@ -78,8 +78,8 @@ export function ArchitectureTab() {
               />
               <BenchmarkBar 
                 label="Carga de CPU (Parsing)" 
-                legacy="85%" 
-                nexus="12%" 
+                legacy="85" 
+                nexus="12" 
                 legacyPercent={85} 
                 nexusPercent={12} 
                 unit="%"
@@ -96,8 +96,8 @@ export function ArchitectureTab() {
               />
               <BenchmarkBar 
                 label="Tempo de Garbage Collection" 
-                legacy="120ms" 
-                nexus="15ms" 
+                legacy="120" 
+                nexus="15" 
                 legacyPercent={100} 
                 nexusPercent={12} 
                 unit="ms"

@@ -18,20 +18,28 @@ function Header() {
     
     if (href.startsWith('#')) {
       if (location.pathname !== '/') {
-        navigate({ pathname: '/', hash: href });
-      } else {
-        const targetId = href.replace('#', '');
+        navigate('/');
         setTimeout(() => {
+          const targetId = href.replace('#', '');
           const element = document.getElementById(targetId);
           if (element) {
-            element.scrollIntoView({ behavior: 'smooth' });
-            try {
-              window.history.pushState(null, '', href);
-            } catch (err) {
-              // Ignore pushState errors in iframes
-            }
+            const headerOffset = 80;
+            const elementPosition = element.getBoundingClientRect().top;
+            const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+            window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+            try { window.history.pushState(null, '', href); } catch (err) {}
           }
-        }, 100);
+        }, 300);
+      } else {
+        const targetId = href.replace('#', '');
+        const element = document.getElementById(targetId);
+        if (element) {
+          const headerOffset = 80;
+          const elementPosition = element.getBoundingClientRect().top;
+          const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+          window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+          try { window.history.pushState(null, '', href); } catch (err) {}
+        }
       }
     } else {
       navigate(href);
@@ -48,7 +56,7 @@ function Header() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/50 py-4">
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3 group cursor-pointer">
           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
             <Activity className="w-6 h-6 text-white" />
