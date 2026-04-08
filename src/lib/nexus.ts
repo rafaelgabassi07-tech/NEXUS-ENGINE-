@@ -82,12 +82,32 @@ export type { AssetType, FetchAtivoResult };
 
 export class NexusEngineUltra {
 
+  // --- WARM START CACHE ---
+  // In serverless environments, the container might stay alive for a few minutes.
+  // This static map acts as a zero-latency cache for repeated requests.
+  private static memoryCache = new Map<string, { data: FetchAtivoResult; timestamp: number }>();
+  private static CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
   static async fetchAtivo(
     ticker: string,
     type: AssetType = 'ACAO',
     isRetry: boolean = false,
   ): Promise<FetchAtivoResult> {
     const cleanTicker = ticker.trim().replace(/\.SA$/i, '').toUpperCase();
+    const cacheKey = `${cleanTicker}-${type}`;
+
+    // Check Warm Start Cache
+    if (!isRetry) {
+      const cached = this.memoryCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < this.CACHE_TTL_MS) {
+        return { 
+          ...cached.data, 
+          cacheStatus: 'HIT', 
+          logs: [`[${cleanTicker}] Retornado do cache em memória (Warm Start) em 0ms`] 
+        };
+      }
+    }
+
     const preset = NEXUS_PRESETS[type];
     const url = `${preset.url_base}/${cleanTicker.toLowerCase()}/`;
     const logs: string[] = [];
@@ -99,7 +119,12 @@ export class NexusEngineUltra {
 
     try {
       const result = await fetchPromise;
-      return { ticker: cleanTicker, ...result, cacheStatus: 'MISS', logs };
+      const finalData = { ticker: cleanTicker, ...result, cacheStatus: 'MISS' as const, logs };
+      
+      // Save to Warm Start Cache
+      this.memoryCache.set(cacheKey, { data: finalData, timestamp: Date.now() });
+      
+      return finalData;
     } catch (error) {
       const err = error as Error;
       log(`FALHA CRÍTICA: ${err.message}`);
@@ -174,6 +199,14 @@ export class NexusEngineUltra {
         fill('P/L', quote.trailingPE);
         fill('P/VP', quote.priceToBook);
         fill('VPA', quote.bookValue);
+        fill('LPA', quote.epsTrailingTwelveMonths);
+        
+        // Advanced fallbacks for ACAO
+        if (quote.profitMargins) fill('Margem Líquida', (quote.profitMargins * 100).toFixed(2) + '%');
+        if (quote.returnOnEquity) fill('ROE', (quote.returnOnEquity * 100).toFixed(2) + '%');
+        if (quote.returnOnAssets) fill('ROIC', (quote.returnOnAssets * 100).toFixed(2) + '%'); // ROA as proxy
+        if (quote.revenuePerShare && quote.regularMarketPrice) fill('PSR', quote.regularMarketPrice / quote.revenuePerShare);
+
         if (quote.trailingAnnualDividendYield) 
           fill('Dividend Yield', (quote.trailingAnnualDividendYield * 100).toFixed(2) + '%');
       } else {
@@ -225,7 +258,7 @@ export class NexusEngineUltra {
         const isTerminal = i === retries - 1 || (err as Error).message.includes('404');
         if (isTerminal) throw err;
         log(`Erro na tentativa ${i + 1}: ${(err as Error).message}. Aguardando backoff...`);
-        await delay(800 * (i + 1));
+        await delay(300 * (i + 1)); // Reduced from 800 to 300 to prevent Vercel timeout
       }
     }
     throw new Error("Retry exhausted");
@@ -245,7 +278,14 @@ export class NexusEngineUltra {
     
     const allLabels = new Set(Object.keys(labelMap));
     const abortCtrl = new AbortController();
-    const timeoutId = setTimeout(() => abortCtrl.abort(), 15000);
+    
+    // Watchdog Timer: Reduced to 4s to ensure it aborts BEFORE Vercel's 10s hard limit
+    let timeoutId: NodeJS.Timeout;
+    const resetWatchdog = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => abortCtrl.abort(), 4000); 
+    };
+    resetWatchdog();
 
     const results: ResultMap = {};
     let foundCount = 0;
@@ -270,6 +310,10 @@ export class NexusEngineUltra {
 
         if (attr.title && allLabels.has(attr.title.toLowerCase())) {
           lastLabel = labelMap[attr.title.toLowerCase()];
+        } else if (attr['aria-label'] && allLabels.has(attr['aria-label'].toLowerCase())) {
+          lastLabel = labelMap[attr['aria-label'].toLowerCase()];
+        } else if (attr['data-title'] && allLabels.has(attr['data-title'].toLowerCase())) {
+          lastLabel = labelMap[attr['data-title'].toLowerCase()];
         }
       },
       ontext(t) {
@@ -313,11 +357,19 @@ export class NexusEngineUltra {
       const response = await fetch(url, {
         headers: { 
           'User-Agent': userAgent,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-          'Accept-Language': 'pt-BR,pt;q=0.9',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+          'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
           'Referer': 'https://investidor10.com.br/',
           'Origin': 'https://investidor10.com.br',
-          'Cache-Control': 'no-cache'
+          'Cache-Control': 'max-age=0',
+          'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+          'Sec-Ch-Ua-Mobile': '?0',
+          'Sec-Ch-Ua-Platform': '"Windows"',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'same-origin',
+          'Sec-Fetch-User': '?1',
+          'Upgrade-Insecure-Requests': '1'
         },
         signal: abortCtrl.signal,
       });
@@ -330,13 +382,22 @@ export class NexusEngineUltra {
       if (response.body) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (value) {
-            bytesProcessed += value.length;
-            parser.write(decoder.decode(value, { stream: true }));
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) {
+              resetWatchdog(); // Data is flowing, keep connection alive
+              bytesProcessed += value.length;
+              parser.write(decoder.decode(value, { stream: true }));
+            }
           }
+        } finally {
+          // Clean up the reader to prevent memory leaks in serverless
+          if (abortCtrl.signal.aborted) {
+            reader.cancel().catch(() => {});
+          }
+          reader.releaseLock();
         }
       }
       parser.end();
@@ -360,7 +421,7 @@ export class NexusEngineUltra {
   }
 
   static clearCache() { 
-    // No-op for serverless
+    this.memoryCache.clear();
   }
 
   static async fetchHistoricoGrafico(ticker: string, period: ChartPeriod = '1y'): Promise<HistoricalQuote[]> {
