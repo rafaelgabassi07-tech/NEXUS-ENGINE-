@@ -5,10 +5,10 @@ import { cn } from '../lib/utils';
 
 export function BenchmarkTab() {
   const benchmarks = [
-    { label: 'Tempo de Resposta (Avg)', legacy: '1.2s', nexus: '180ms', improvement: '85% mais rápido', color: 'blue' },
-    { label: 'Uso de Memória (Peak)', legacy: '450MB', nexus: '42MB', improvement: '10x mais leve', color: 'emerald' },
-    { label: 'Consumo de Banda', legacy: '100%', nexus: '15%', improvement: '85% economia', color: 'indigo' },
-    { label: 'Taxa de Sucesso', legacy: '92%', nexus: '99.9%', improvement: 'Alta Resiliência', color: 'blue' },
+    { label: 'Alocação de Memória', legacy: 'DOM Completo', nexus: 'Buffer de Texto', improvement: 'Zero-AST', color: 'emerald' },
+    { label: 'Parser HTML', legacy: 'Cheerio/JSDOM', nexus: 'SAX Stream', improvement: 'htmlparser2', color: 'blue' },
+    { label: 'Processamento', legacy: 'Download Total', nexus: 'Early Abort', improvement: 'Interrompe ao achar', color: 'indigo' },
+    { label: 'Concorrência', legacy: 'Sequencial', nexus: 'Promise.race', improvement: 'Lotes de 5', color: 'blue' },
   ];
 
   return (
@@ -28,34 +28,20 @@ export function BenchmarkTab() {
           </div>
           
           <div className="space-y-4">
-            <div className="flex items-center gap-4">
-              <span className="text-[10px] font-bold text-slate-500 w-16 uppercase tracking-widest">Legado</span>
-              <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  whileInView={{ width: '100%' }}
-                  className="h-full bg-slate-700" 
-                />
-              </div>
-              <span className="text-xs font-mono font-bold text-slate-500 w-12 text-right">{item.legacy}</span>
+            <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-slate-800/50">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Legado</span>
+              <span className="text-xs font-mono font-bold text-slate-400">{item.legacy}</span>
             </div>
             
-            <div className="flex items-center gap-4">
-              <span className="text-[10px] font-bold text-blue-400 w-16 uppercase tracking-widest">Nexus</span>
-              <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  whileInView={{ width: '15%' }}
-                  className="h-full bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.5)]" 
-                />
-              </div>
-              <span className="text-xs font-mono font-bold text-blue-400 w-12 text-right">{item.nexus}</span>
+            <div className="flex items-center justify-between p-3 bg-blue-900/10 rounded-xl border border-blue-500/20">
+              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Nexus</span>
+              <span className="text-xs font-mono font-bold text-blue-400">{item.nexus}</span>
             </div>
           </div>
           
           <div className="mt-6 flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
             <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-            <span>Validado via Benchmark Sintético</span>
+            <span>Diferença Arquitetural</span>
           </div>
         </div>
       ))}

@@ -125,9 +125,9 @@ export function ArchitectureTab() {
                   <div className="p-2 bg-slate-800/50 rounded-xl border border-slate-700/50 w-fit">
                     <Activity className="w-4 h-4 text-blue-400" />
                   </div>
-                  <h3 className="font-bold text-white font-display">Undici (C++)</h3>
+                  <h3 className="font-bold text-white font-display">Native Fetch API</h3>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">O Nexus utiliza Undici, o cliente HTTP mais rápido para Node.js. Gerencia pools de conexões nativamente, eliminando overhead de handshake TCP.</p>
+                <p className="text-xs text-slate-400 leading-relaxed">O Nexus utiliza a API Fetch nativa do ambiente Serverless (Vercel/Node.js), garantindo compatibilidade total e processamento eficiente de streams HTTP sem dependências pesadas.</p>
               </div>
               <div className="py-5">
                 <div className="flex items-center gap-3 mb-2">
@@ -143,9 +143,9 @@ export function ArchitectureTab() {
                   <div className="p-2 bg-slate-800/50 rounded-xl border border-slate-700/50 w-fit">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   </div>
-                  <h3 className="font-bold text-white font-display">Request Coalescing</h3>
+                  <h3 className="font-bold text-white font-display">Stateless Execution</h3>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">Sistema de Deduplicação: se múltiplas threads pedem o mesmo ativo, o Nexus faz apenas uma chamada e compartilha a Promise.</p>
+                <p className="text-xs text-slate-400 leading-relaxed">Arquitetura 100% Stateless. Sem retenção de cache em memória (LRU), garantindo que cada invocação da função Serverless obtenha dados frescos e não sofra vazamento de memória.</p>
               </div>
             </div>
             <div className="space-y-5 md:pl-5 pt-5 md:pt-0 divide-y divide-slate-800/50">
@@ -154,9 +154,9 @@ export function ArchitectureTab() {
                   <div className="p-2 bg-slate-800/50 rounded-xl border border-slate-700/50 w-fit">
                     <Cpu className="w-4 h-4 text-cyan-400" />
                   </div>
-                  <h3 className="font-bold text-white font-display">Worker Threads Pool</h3>
+                  <h3 className="font-bold text-white font-display">Serverless Concurrency</h3>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">Distribuição de carga em múltiplos núcleos da CPU via Piscina/Worker Threads, permitindo atingir +18.000 requisições por segundo.</p>
+                <p className="text-xs text-slate-400 leading-relaxed">Distribuição de carga via Vercel Serverless Functions. Processamento em lotes (batches) controlados para evitar estouro de memória e timeout.</p>
               </div>
               <div className="pb-5 pt-5 md:pt-0">
                 <div className="flex items-center gap-3 mb-2">
@@ -181,18 +181,18 @@ export function ArchitectureTab() {
                   <div className="p-2 bg-slate-800/50 rounded-xl border border-slate-700/50 w-fit">
                     <Settings className="w-4 h-4 text-purple-400" />
                   </div>
-                  <h3 className="font-bold text-white font-display">LRU Cache + SWR</h3>
+                  <h3 className="font-bold text-white font-display">Vercel Edge Network</h3>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">Cache Least Recently Used com TTL de 5min. Respostas instantâneas (1ms) para ativos frequentes, reduzindo carga externa.</p>
+                <p className="text-xs text-slate-400 leading-relaxed">Hospedado na infraestrutura global da Vercel. Roteamento inteligente e execução de funções próximas ao usuário para menor latência.</p>
               </div>
               <div className="pt-5">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="p-2 bg-slate-800/50 rounded-xl border border-slate-700/50 w-fit">
                     <Activity className="w-4 h-4 text-rose-400" />
                   </div>
-                  <h3 className="font-bold text-white font-display">HTTP/1.1 Pipelining</h3>
+                  <h3 className="font-bold text-white font-display">Concorrência Dinâmica</h3>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">Envio de múltiplas requisições HTTP na mesma conexão TCP sem esperar pelas respostas correspondentes, maximizando o throughput de rede.</p>
+                <p className="text-xs text-slate-400 leading-relaxed">Mecanismo de Promise.race para processar múltiplos ativos simultaneamente, respeitando limites de concorrência (ex: 5 por vez) para estabilidade.</p>
               </div>
             </div>
           </div>
@@ -205,10 +205,10 @@ export function ArchitectureTab() {
             <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-800/50 hidden md:block" />
             <div className="space-y-6">
               {[
-                { step: 1, title: 'Verificação de Cache', desc: 'Consulta o LRU Cache para ver se o dado já existe e ainda é válido (TTL < 5min).' },
-                { step: 2, title: 'Deduplicação (In-Flight)', desc: 'Verifica se já existe uma requisição em curso para o mesmo ticker para compartilhar a Promise.' },
-                { step: 3, title: 'Requisição Undici', desc: 'Inicia a conexão HTTP usando o pool de agentes nativos com User-Agent randômico.' },
-                { step: 4, title: 'Stream Parsing (SAX)', desc: 'Processa os bytes do HTML conforme eles chegam, sem carregar o arquivo inteiro na RAM.' },
+                { step: 1, title: 'Invocação Serverless', desc: 'A Vercel Serverless Function é acionada via POST /api/scrape com a lista de ativos.' },
+                { step: 2, title: 'Processamento em Lote', desc: 'O motor divide a lista em lotes (ex: 5 ativos por vez) para não estourar a memória da função.' },
+                { step: 3, title: 'Requisição Fetch API', desc: 'Inicia a conexão HTTP usando a API Fetch nativa com User-Agent randômico.' },
+                { step: 4, title: 'Stream Parsing (SAX)', desc: 'Processa os bytes do HTML conforme eles chegam via TextDecoderStream, sem carregar o arquivo inteiro na RAM.' },
                 { step: 5, title: 'Early Abort', desc: 'Interrompe a conexão assim que os dados alvo (P/L, DY, etc) são extraídos.' },
                 { step: 6, title: 'Fallback Automático', desc: 'Se o ativo não for encontrado como Ação, tenta automaticamente como FII (e vice-versa).' },
               ].map((item) => (

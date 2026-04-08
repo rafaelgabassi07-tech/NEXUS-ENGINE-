@@ -5,12 +5,12 @@ export function UseCasesSection() {
   const cases = [
     {
       title: "Trading Algorítmico",
-      desc: "Alimente seus robôs de investimento com dados em tempo real. A latência de 180ms permite reações mais rápidas a movimentos do mercado.",
+      desc: "Alimente seus robôs de investimento com dados em tempo real. A arquitetura SAX permite reações mais rápidas a movimentos do mercado.",
       icon: <Activity className="w-6 h-6 text-blue-400" />
     },
     {
       title: "Dashboards Financeiros",
-      desc: "Construa painéis de controle que atualizam milhares de ativos simultaneamente sem travar o navegador ou o servidor.",
+      desc: "Construa painéis de controle que atualizam lotes de ativos simultaneamente sem travar o navegador ou a Serverless Function.",
       icon: <BarChart3 className="w-6 h-6 text-emerald-400" />
     },
     {

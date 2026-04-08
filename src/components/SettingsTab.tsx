@@ -61,10 +61,10 @@ export function SettingsTab() {
               <div className="flex flex-col justify-between h-full gap-5">
                 <div>
                   <h4 className="text-base font-bold font-display mb-1 text-white">Limite de Concorrência (Batch)</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">O motor está configurado para processar lotes com limite de concorrência dinâmico. Atualmente, a API processa até 50 requisições simultâneas por lote para evitar estourar a memória da Serverless Function.</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">O motor está configurado para processar lotes com limite de concorrência dinâmico. Atualmente, a API processa até 5 requisições simultâneas por lote para evitar estourar a memória da Serverless Function.</p>
                 </div>
                 <div className="flex items-center gap-2 bg-slate-900 p-2 rounded-xl border border-slate-800 w-fit">
-                  <span className="text-xs font-bold text-blue-400">50 reqs/lote</span>
+                  <span className="text-xs font-bold text-blue-400">5 reqs/lote</span>
                 </div>
               </div>
             </div>

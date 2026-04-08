@@ -28,7 +28,23 @@ import {
 // ═══════════════════════════════════════════════════════════
 
 // Defensive config for yahooFinance to handle different import behaviors
-const yf = (yahooFinance as any).default || yahooFinance;
+// yahoo-finance2 exports a default instance, but depending on the module system it might be nested
+let yf: any;
+if (yahooFinance && (yahooFinance as any).default && typeof (yahooFinance as any).default.quote === 'function') {
+  yf = (yahooFinance as any).default;
+} else if (yahooFinance && typeof (yahooFinance as any).quote === 'function') {
+  yf = yahooFinance;
+} else if (yahooFinance && (yahooFinance as any).default && (yahooFinance as any).default.default) {
+  yf = (yahooFinance as any).default.default;
+} else {
+  // Fallback if it's a class that needs instantiation (though v2 usually exports an instance)
+  try {
+    const YFClass = (yahooFinance as any).default || yahooFinance;
+    yf = new YFClass();
+  } catch (e) {
+    yf = yahooFinance; // Last resort
+  }
+}
 
 try {
   if (yf && typeof yf.setGlobalConfig === 'function') {
@@ -89,8 +105,8 @@ export class NexusEngineUltra {
       log(`FALHA CRÍTICA: ${err.message}`);
       console.error(`[NexusEngine] Falha em ${cleanTicker} (${type}): ${err.message}`);
 
-      if (!isRetry && (err.message.includes('404') || err.message.includes('410'))) {
-        log(`404 detectado. Tentando fallback para outro tipo de ativo...`);
+      if (!isRetry && (err.message.includes('404') || err.message.includes('410') || err.message.includes('Falha total'))) {
+        log(`Falha primária detectada. Tentando fallback para outro tipo de ativo...`);
         const fallbackType: AssetType = type === 'ACAO' ? 'FII' : 'ACAO';
         const fallbackResult = await this.fetchAtivo(cleanTicker, fallbackType, true);
         if ('logs' in fallbackResult && fallbackResult.logs) {
@@ -131,8 +147,12 @@ export class NexusEngineUltra {
         return htmlResult; 
       }
     } catch (e) {
-      if ((e as Error).message.includes('404')) throw e;
-      log(`Aviso: Scraper falhou ou incompleto: ${(e as Error).message}`);
+      if ((e as Error).message.includes('404') || (e as Error).message.includes('410')) {
+        log(`Aviso: Investidor10 retornou ${(e as Error).message}. Tentando fallback alternativo...`);
+        // We don't throw here so it can proceed to Phase 2 (Yahoo Finance)
+      } else {
+        log(`Aviso: Scraper falhou ou incompleto: ${(e as Error).message}`);
+      }
     }
 
     // --- FASE 2: Yahoo Finance (Complemento) ---
@@ -144,7 +164,7 @@ export class NexusEngineUltra {
       let yahooAdded = 0;
 
       const fill = (key: AssetLabel, val: any) => {
-        if (!finalResults[key] && val != null) {
+        if (!finalResults[key] && val != null && val !== 0) {
           finalResults[key] = typeof val === 'number' ? val.toFixed(2) : val;
           yahooAdded++;
         }
@@ -161,6 +181,11 @@ export class NexusEngineUltra {
         fill('Valor Patrimonial', quote.bookValue);
         if (quote.trailingAnnualDividendYield)
           fill('Dividend Yield', (quote.trailingAnnualDividendYield * 100).toFixed(2) + '%');
+        
+        // FII specific fallbacks from Yahoo if Investidor10 failed completely
+        if (quote.regularMarketPrice) {
+          fill('Valor de Mercado', quote.marketCap);
+        }
       }
 
       if (yahooAdded > 0) {

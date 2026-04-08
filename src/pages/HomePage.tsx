@@ -50,7 +50,7 @@ export default function HomePage() {
         if (element) {
           element.scrollIntoView({ behavior: 'smooth' });
         }
-      }, 100);
+      }, 300);
     }
 
     return () => {
@@ -76,7 +76,11 @@ export default function HomePage() {
     
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
-      window.history.pushState(null, '', href);
+      try {
+        window.history.pushState(null, '', href);
+      } catch (err) {
+        // Ignore pushState errors in iframes
+      }
     }
   };
 
@@ -158,10 +162,10 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-blue-500/5 blur-[100px] rounded-full pointer-events-none"></div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 relative z-10">
           {[
-            { label: 'Requisições/Dia', value: '2.5M+', icon: <Globe className="w-5 h-5" />, color: 'blue' },
-            { label: 'Tempo Médio', value: '180ms', icon: <Zap className="w-5 h-5" />, color: 'emerald' },
-            { label: 'Uptime Global', value: '99.99%', icon: <Activity className="w-5 h-5" />, color: 'blue' },
-            { label: 'Economia Banda', value: '85%', icon: <BarChart3 className="w-5 h-5" />, color: 'indigo' }
+            { label: 'Concorrência Máxima', value: '5 reqs/lote', icon: <Globe className="w-5 h-5" />, color: 'blue' },
+            { label: 'Parser HTML', value: 'Zero-AST', icon: <Zap className="w-5 h-5" />, color: 'emerald' },
+            { label: 'Tentativas (Retries)', value: 'Até 2x', icon: <Activity className="w-5 h-5" />, color: 'blue' },
+            { label: 'Alocação de Memória', value: 'O(1)', icon: <BarChart3 className="w-5 h-5" />, color: 'indigo' }
           ].map((stat, i) => (
             <motion.div
               key={i}

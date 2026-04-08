@@ -18,14 +18,20 @@ function Header() {
     
     if (href.startsWith('#')) {
       if (location.pathname !== '/') {
-        navigate('/' + href);
+        navigate({ pathname: '/', hash: href });
       } else {
         const targetId = href.replace('#', '');
-        const element = document.getElementById(targetId);
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth' });
-          window.history.pushState(null, '', href);
-        }
+        setTimeout(() => {
+          const element = document.getElementById(targetId);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth' });
+            try {
+              window.history.pushState(null, '', href);
+            } catch (err) {
+              // Ignore pushState errors in iframes
+            }
+          }
+        }, 100);
       }
     } else {
       navigate(href);
