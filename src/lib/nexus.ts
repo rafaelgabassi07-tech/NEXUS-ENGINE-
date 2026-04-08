@@ -1,6 +1,4 @@
-import { request, Agent, interceptors } from 'undici';
 import { Parser } from 'htmlparser2';
-import { LRUCache } from 'lru-cache';
 import { performance } from 'perf_hooks';
 import yahooFinance from 'yahoo-finance2';
 
@@ -40,13 +38,6 @@ try {
   console.warn('[NexusEngine] Could not set yahooFinance global config:', e);
 }
 
-const CACHE = new LRUCache<string, FetchSuccess>({
-  max: 1000,
-  ttl: 1000 * 60 * 5, // 5 minutos
-});
-
-const PENDING_REQUESTS = new Map<string, Promise<FetchSuccess>>();
-
 const NEXUS_PRESETS: Record<AssetType, AssetPreset> = {
   ACAO: {
     url_base: 'https://investidor10.com.br/acoes',
@@ -66,11 +57,6 @@ const NEXUS_PRESETS: Record<AssetType, AssetPreset> = {
     ],
   },
 } as const;
-
-const HTTP_DISPATCHER = new Agent({
-  keepAliveTimeout: 10_000,
-  keepAliveMaxTimeout: 30_000,
-}).compose(interceptors.redirect({ maxRedirections: 5 }));
 
 // ═══════════════════════════════════════════════════════════
 // ENGINE PRINCIPAL
@@ -92,29 +78,11 @@ export class NexusEngineUltra {
 
     const log = (m: string) => logs.push(`[${cleanTicker}] ${m}`);
 
-    // 1. Cache HIT
-    const cached = CACHE.get(url);
-    if (cached) {
-      log(`Cache HIT para ${url}`);
-      return { ticker: cleanTicker, ...cached, cacheStatus: 'HIT', logs };
-    }
-
-    // 2. Deduplicação
-    if (PENDING_REQUESTS.has(url)) {
-      log(`Deduplicação: Já existe requisição em curso para ${cleanTicker}`);
-      try {
-        const result = await PENDING_REQUESTS.get(url)!;
-        return { ticker: cleanTicker, ...result, cacheStatus: 'DEDUPE', logs };
-      } catch { /* erro na pendente, tenta nova */ }
-    }
-
     log(`Iniciando busca profunda para ${cleanTicker} (${type})`);
     const fetchPromise = this._executeFetchWithFallback(cleanTicker, url, preset.labels, type, log);
-    PENDING_REQUESTS.set(url, fetchPromise);
 
     try {
       const result = await fetchPromise;
-      CACHE.set(url, result);
       return { ticker: cleanTicker, ...result, cacheStatus: 'MISS', logs };
     } catch (error) {
       const err = error as Error;
@@ -131,8 +99,6 @@ export class NexusEngineUltra {
         return fallbackResult;
       }
       return { ticker: cleanTicker, error: err.message, cacheStatus: 'ERROR', logs };
-    } finally {
-      PENDING_REQUESTS.delete(url);
     }
   }
 
@@ -319,8 +285,7 @@ export class NexusEngineUltra {
     try {
       const userAgent = getRandomAgent();
       log(`Conectando... UA: ${userAgent.slice(0, 30)}...`);
-      const { statusCode, body } = await request(url, {
-        dispatcher: HTTP_DISPATCHER,
+      const response = await fetch(url, {
         headers: { 
           'User-Agent': userAgent,
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -332,15 +297,22 @@ export class NexusEngineUltra {
         signal: abortCtrl.signal,
       });
 
-      if (statusCode !== 200) {
-        await body.dump();
-        throw new Error(`HTTP ${statusCode}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
 
       log(`Stream iniciado. Analisando bytes...`);
-      for await (const chunk of body) {
-        bytesProcessed += (chunk as Buffer).length;
-        parser.write((chunk as Buffer).toString('utf-8'));
+      if (response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            bytesProcessed += value.length;
+            parser.write(decoder.decode(value, { stream: true }));
+          }
+        }
       }
       parser.end();
     } catch (err) {
@@ -362,7 +334,9 @@ export class NexusEngineUltra {
     };
   }
 
-  static clearCache() { CACHE.clear(); }
+  static clearCache() { 
+    // No-op for serverless
+  }
 
   static async fetchHistoricoGrafico(ticker: string, period: ChartPeriod = '1y'): Promise<HistoricalQuote[]> {
     try {

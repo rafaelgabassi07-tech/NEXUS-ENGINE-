@@ -94,9 +94,9 @@ app.listen(3000, () => console.log('Nexus API rodando na porta 3000'));`;
             O Nexus Engine foi construído para rodar em ambientes Node.js modernos (v18+). Ele utiliza bibliotecas nativas de alta performance para maximizar o throughput.
           </p>
           <div className="bg-slate-950/80 p-5 rounded-2xl border border-slate-800 flex items-center justify-between group">
-            <code className="text-blue-400 font-mono text-sm">npm install undici htmlparser2</code>
+            <code className="text-blue-400 font-mono text-sm">npm install htmlparser2</code>
             <button 
-              onClick={() => copyToClipboard('npm install undici htmlparser2', 'npm')}
+              onClick={() => copyToClipboard('npm install htmlparser2', 'npm')}
               className="text-[10px] font-bold text-slate-500 hover:text-white transition-colors bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800"
             >
               {copied === 'npm' ? 'COPIADO' : 'COPIAR'}
@@ -104,8 +104,8 @@ app.listen(3000, () => console.log('Nexus API rodando na porta 3000'));`;
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
             <div className="p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50">
-              <p className="text-xs text-blue-400 font-bold mb-1">undici</p>
-              <p className="text-[10px] text-slate-500 leading-relaxed">Cliente HTTP oficial do Node.js, escrito em C++ para máxima performance de rede.</p>
+              <p className="text-xs text-blue-400 font-bold mb-1">fetch nativo</p>
+              <p className="text-[10px] text-slate-500 leading-relaxed">Cliente HTTP integrado ao Node.js e Vercel, ideal para Serverless.</p>
             </div>
             <div className="p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50">
               <p className="text-xs text-emerald-400 font-bold mb-1">htmlparser2</p>

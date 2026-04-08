@@ -1,428 +1,123 @@
-import { useState, useEffect, type ReactNode, type MouseEvent } from 'react';
-import { Activity, Info, Settings, Play, Cpu, Download, CheckCircle2, XCircle, Search, Zap, Terminal, Copy, Globe, Code2, BarChart3, Trash2, ArrowRight, Menu, X, ArrowUp, ChevronDown, ChevronUp, Briefcase, MessageCircleQuestion } from 'lucide-react';
+import { useState, useEffect, type MouseEvent } from 'react';
+import { BrowserRouter, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
+import { Activity, Settings, MessageCircleQuestion, Menu, X } from 'lucide-react';
 import { cn } from './lib/utils';
-import { motion, AnimatePresence } from 'motion/react';
-import nexusCode from './lib/nexus.ts?raw';
-import type { AssetType, FetchAtivoResult } from './lib/nexus';
+import { AnimatePresence, motion } from 'motion/react';
+import HomePage from './pages/HomePage';
+import { SettingsPage } from './pages/SettingsPage';
+import { FAQPage } from './pages/FAQPage';
 
-import { ArchitectureTab } from './components/ArchitectureTab';
-import { InfoTab } from './components/InfoTab';
-import { SettingsTab } from './components/SettingsTab';
-import { UseCasesSection } from './components/UseCasesSection';
-import { BenchmarkTab } from './components/BenchmarkTab';
-import { FAQSection } from './components/FAQSection';
-import { TestTab } from './components/TestTab';
-
-export default function App() {
+function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [showScrollTop, setShowScrollTop] = useState(false);
-  const [isCodeExpanded, setIsCodeExpanded] = useState(false);
-  const [activeSection, setActiveSection] = useState('');
-
-  // Add scroll listener for scroll-to-top button and active section
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 400) {
-        setShowScrollTop(true);
-      } else {
-        setShowScrollTop(false);
-      }
-    };
-
-    const observerOptions = {
-      root: null,
-      rootMargin: '-80px 0px -50% 0px',
-      threshold: 0
-    };
-
-    const observerCallback = (entries: IntersectionObserverEntry[]) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          setActiveSection(`#${entry.target.id}`);
-        }
-      });
-    };
-
-    const observer = new IntersectionObserver(observerCallback, observerOptions);
-    const sections = document.querySelectorAll('section[id]');
-    sections.forEach(section => observer.observe(section));
-
-    window.addEventListener('scroll', handleScroll);
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      sections.forEach(section => observer.unobserve(section));
-    };
-  }, []);
-
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const handleNavClick = (e: MouseEvent<HTMLAnchorElement>, href: string) => {
     e.preventDefault();
     setIsMobileMenuOpen(false);
     
-    if (href === '#') {
-      scrollToTop();
-      return;
-    }
-
-    const targetId = href.replace('#', '');
-    const element = document.getElementById(targetId);
-    
-    if (element) {
-      setTimeout(() => {
-        const offset = 80;
-        const bodyRect = document.body.getBoundingClientRect().top;
-        const elementRect = element.getBoundingClientRect().top;
-        const elementPosition = elementRect - bodyRect;
-        const offsetPosition = elementPosition - offset;
-
-        window.scrollTo({
-          top: offsetPosition,
-          behavior: 'smooth'
-        });
-      }, 100);
+    if (href.startsWith('#')) {
+      if (location.pathname !== '/') {
+        navigate('/');
+        setTimeout(() => {
+          const element = document.getElementById(href.replace('#', ''));
+          if (element) element.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      } else {
+        const element = document.getElementById(href.replace('#', ''));
+        if (element) element.scrollIntoView({ behavior: 'smooth' });
+      }
+    } else {
+      navigate(href);
     }
   };
 
   const navLinks = [
-    { href: '#benchmark', label: 'Benchmarks de Performance' },
-    { href: '#use-cases', label: 'Aplicações & Casos de Uso' },
-    { href: '#features', label: 'Arquitetura do Sistema' },
-    { href: '#source', label: 'Código Fonte & SDK' },
-    { href: '#playground', label: 'Playground de Extração' },
-    { href: '#api', label: 'Documentação da API' },
-    { href: '#settings', label: 'Configurações do Motor' },
+    { href: '#benchmark', label: 'Benchmarks' },
+    { href: '#use-cases', label: 'Casos de Uso' },
+    { href: '#features', label: 'Arquitetura' },
+    { href: '#source', label: 'Código' },
+    { href: '#playground', label: 'Playground' },
   ];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500 selection:text-white overflow-x-hidden">
-      {/* Top Navigation */}
-      <nav className={cn(
-        "fixed top-0 left-0 right-0 z-50 transition-all duration-500 border-b",
-        showScrollTop 
-          ? "bg-slate-950/80 backdrop-blur-xl border-slate-800/50 py-2" 
-          : "bg-transparent border-transparent py-4"
-      )}>
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <a 
-            href="#" 
-            onClick={(e) => handleNavClick(e, '#')} 
-            className="flex items-center gap-3 group cursor-pointer"
-          >
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
-              <Activity className="w-6 h-6 text-white" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-lg font-bold tracking-tight font-display text-white group-hover:text-blue-400 transition-colors">Nexus Engine</span>
-              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest -mt-1">Ultra v2.5</span>
-            </div>
-          </a>
-          <div className="hidden md:flex items-center gap-1 text-sm font-medium">
-            {navLinks.map(link => (
-              <a 
-                key={link.href} 
-                href={link.href} 
-                onClick={(e) => handleNavClick(e, link.href)}
-                className={cn(
-                  "px-4 py-2 rounded-full transition-all duration-300 relative group",
-                  activeSection === link.href 
-                    ? "text-white" 
-                    : "text-slate-400 hover:text-slate-200"
-                )}
-              >
-                {activeSection === link.href && (
-                  <motion.div 
-                    layoutId="activeNav"
-                    className="absolute inset-0 bg-white/5 rounded-full border border-white/10"
-                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                  />
-                )}
-                <span className="relative z-10">{link.label}</span>
-              </a>
-            ))}
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/50 py-4">
+      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <Link to="/" className="flex items-center gap-3 group cursor-pointer">
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
+            <Activity className="w-6 h-6 text-white" />
           </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-full border border-slate-800">
-              <div className="w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.8)] animate-pulse" />
-              <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">Sistema Online</span>
-            </div>
-            <a href="#playground" className="hidden md:flex bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors">
-              Testar Agora
+          <div className="flex flex-col">
+            <span className="text-lg font-bold tracking-tight font-display text-white group-hover:text-blue-400 transition-colors">Nexus Engine</span>
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest -mt-1">Ultra v2.5</span>
+          </div>
+        </Link>
+        
+        <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-400">
+          {navLinks.map(link => (
+            <a key={link.href} href={link.href} onClick={(e) => handleNavClick(e, link.href)} className="hover:text-white transition-colors">
+              {link.label}
             </a>
-            <button 
-              className="md:hidden p-2 text-slate-400 hover:text-white transition-colors"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-          </div>
+          ))}
+          <div className="h-4 w-px bg-slate-800" />
+          <Link to="/settings" className="hover:text-white transition-colors" title="Configurações">
+            <Settings className="w-5 h-5" />
+          </Link>
+          <Link to="/faq" className="hover:text-white transition-colors" title="Dúvidas Frequentes">
+            <MessageCircleQuestion className="w-5 h-5" />
+          </Link>
         </div>
         
-        {/* Mobile Menu */}
-        <AnimatePresence>
-          {isMobileMenuOpen && (
-            <motion.div 
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="md:hidden border-t border-slate-800/50 bg-slate-950/98 backdrop-blur-2xl overflow-hidden shadow-2xl"
-            >
-              <div className="px-6 py-8 flex flex-col gap-2">
-                {navLinks.map((link, i) => (
-                  <motion.a 
-                    key={link.href} 
-                    href={link.href} 
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className={cn(
-                      "flex items-center justify-between px-4 py-4 rounded-2xl transition-all",
-                      activeSection === link.href 
-                        ? "bg-blue-600/10 text-blue-400 border border-blue-500/20" 
-                        : "text-slate-400 hover:text-white hover:bg-slate-900/50 border border-transparent"
-                    )}
-                    onClick={(e) => handleNavClick(e, link.href)}
-                  >
-                    <span className="font-bold text-lg">{link.label}</span>
-                    {activeSection === link.href && <div className="w-1.5 h-1.5 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.8)]" />}
-                  </motion.a>
-                ))}
-                <motion.a 
-                  href="#playground" 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: navLinks.length * 0.05 }}
-                  onClick={(e) => handleNavClick(e, '#playground')}
-                  className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-4 rounded-2xl text-center font-bold text-lg transition-all shadow-lg shadow-blue-900/20 mt-4 active:scale-95"
-                >
-                  Testar Agora
-                </motion.a>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </nav>
-
-      <main className="pt-24 pb-20 relative">
-        {/* Decorative Grid Background */}
-        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[500px] bg-blue-500/10 blur-[120px] rounded-full"></div>
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-20"></div>
-        </div>
-
-        {/* Hero Section */}
-        <section className="max-w-7xl mx-auto px-6 pt-20 pb-32 text-center relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-widest mb-8 shadow-[0_0_20px_rgba(59,130,246,0.15)]"
-          >
-            <Zap className="w-4 h-4" />
-            <span>Nexus Ultra v2.5 Lançado</span>
-          </motion.div>
-          <motion.h1 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-6xl md:text-8xl font-extrabold tracking-tight font-display text-transparent bg-clip-text bg-gradient-to-b from-white via-blue-50 to-slate-400 mb-8 drop-shadow-sm"
-          >
-            A Engine de Extração<br />Definitiva.
-          </motion.h1>
-          <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="text-xl md:text-2xl text-slate-300 max-w-3xl mx-auto mb-12 leading-relaxed font-light"
-          >
-            Construído para performance extrema. O Nexus Engine combina a API do Yahoo Finance com um scraper HTML Zero-AST para entregar dados financeiros em milissegundos.
-          </motion.p>
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4"
-          >
-            <a 
-              href="#playground" 
-              onClick={(e) => handleNavClick(e, '#playground')}
-              className="w-full sm:w-auto px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-lg transition-all shadow-[0_0_30px_rgba(37,99,235,0.3)] hover:shadow-[0_0_40px_rgba(37,99,235,0.5)] hover:-translate-y-1 flex items-center justify-center gap-2"
-            >
-              <Play className="w-5 h-5" />
-              Testar no Playground
-            </a>
-            <a 
-              href="#api" 
-              onClick={(e) => handleNavClick(e, '#api')}
-              className="w-full sm:w-auto px-8 py-4 glass hover:bg-slate-800/80 text-white rounded-xl font-bold text-lg transition-all border border-slate-700 hover:border-slate-600 hover:-translate-y-1 flex items-center justify-center gap-2"
-            >
-              <Code2 className="w-5 h-5" />
-              Ver Documentação
-            </a>
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto px-6 py-4 bg-slate-900/50 hover:bg-slate-800 text-slate-300 rounded-xl font-bold text-lg transition-all border border-slate-800 hover:-translate-y-1 flex items-center justify-center gap-2 group">
-              <svg className="w-5 h-5 fill-current group-hover:text-white transition-colors" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.041-1.412-4.041-1.412-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-              GitHub
-            </a>
-          </motion.div>
-        </section>
-
-        {/* Benchmark Section */}
-        <section id="benchmark" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 scroll-mt-20">
-          <div className="mb-12 text-center">
-            <h2 className="text-3xl font-bold font-display text-white mb-4">Performance Incomparável</h2>
-            <p className="text-slate-400 max-w-2xl mx-auto">Métricas reais extraídas do núcleo da engine comparando a arquitetura legada com o novo Nexus Core.</p>
-          </div>
-          <BenchmarkTab />
-        </section>
-
-        {/* Statistics Section */}
-        <section id="stats" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 relative scroll-mt-20">
-          <div className="absolute inset-0 bg-blue-500/5 blur-[100px] rounded-full pointer-events-none"></div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 relative z-10">
-            {[
-              { label: 'Requisições/Dia', value: '2.5M+', icon: <Globe className="w-5 h-5" />, color: 'blue' },
-              { label: 'Tempo Médio', value: '180ms', icon: <Zap className="w-5 h-5" />, color: 'emerald' },
-              { label: 'Uptime Global', value: '99.99%', icon: <Activity className="w-5 h-5" />, color: 'blue' },
-              { label: 'Economia Banda', value: '85%', icon: <BarChart3 className="w-5 h-5" />, color: 'indigo' }
-            ].map((stat, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                whileInView={{ opacity: 1, scale: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1, type: "spring", stiffness: 100 }}
-                className="glass border border-slate-800/50 p-6 rounded-3xl text-center group hover:bg-slate-800/60 transition-all card-hover"
-              >
-                <div className={cn(
-                  "w-12 h-12 rounded-2xl mx-auto mb-4 flex items-center justify-center border transition-transform group-hover:scale-110",
-                  stat.color === 'blue' ? "bg-blue-500/10 border-blue-500/20 text-blue-400" :
-                  stat.color === 'emerald' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" :
-                  "bg-indigo-500/10 border-indigo-500/20 text-indigo-400"
-                )}>
-                  {stat.icon}
-                </div>
-                <p className="text-2xl font-bold text-white font-display mb-1">{stat.value}</p>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{stat.label}</p>
-              </motion.div>
-            ))}
-          </div>
-        </section>
-
-        {/* Use Cases Section */}
-        <section id="use-cases" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 scroll-mt-20">
-          <div className="mb-12 text-center">
-            <h2 className="text-3xl font-bold font-display text-white mb-4">Casos de Uso</h2>
-            <p className="text-slate-400 max-w-2xl mx-auto">Onde a performance extrema do Nexus Engine faz a diferença no mundo real.</p>
-          </div>
-          <UseCasesSection />
-        </section>
-
-        {/* Architecture Section */}
-        <section id="features" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 bg-slate-900/20 scroll-mt-20">
-          <ArchitectureTab />
-        </section>
-
-        {/* Source Code Section */}
-        <section id="source" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 scroll-mt-20">
-          <div className="mb-12">
-            <h2 className="text-3xl font-bold font-display text-white mb-4">Código Fonte do Núcleo</h2>
-            <p className="text-slate-400 max-w-2xl">O Nexus Engine é open-source. Abaixo está a implementação principal do motor de extração híbrido.</p>
-          </div>
-          <div className="glass rounded-3xl border border-slate-800/50 overflow-hidden shadow-2xl card-shadow">
-            <div className="bg-slate-900/50 px-6 py-3 border-b border-slate-800/50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-red-500/50" />
-                  <div className="w-3 h-3 rounded-full bg-yellow-500/50" />
-                  <div className="w-3 h-3 rounded-full bg-green-500/50" />
-                 <span className="text-xs font-mono text-slate-400 ml-4">nexus-engine.ts</span>
-                </div>
-              </div>
-              <button 
-                onClick={() => {
-                  const code = nexusCode;
-                  navigator.clipboard.writeText(code);
-                }}
-                className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-2 transition-colors"
-              >
-                <Copy className="w-3.5 h-3.5" />
-                Copiar Código
-              </button>
-            </div>
-            <div className={cn("p-6 overflow-x-auto bg-slate-950/80 relative transition-all duration-500", isCodeExpanded ? "max-h-none" : "max-h-[400px] overflow-hidden")}>
-              <pre className="text-sm font-mono leading-relaxed text-slate-300">
-                {nexusCode}
-              </pre>
-              {!isCodeExpanded && (
-                <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent flex items-end justify-center pb-6">
-                  <button 
-                    onClick={() => setIsCodeExpanded(true)} 
-                    className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all hover:-translate-y-0.5"
-                  >
-                    <ChevronDown className="w-4 h-4" />
-                    Expandir Código Completo
-                  </button>
-                </div>
-              )}
-              {isCodeExpanded && (
-                <div className="mt-8 flex justify-center border-t border-slate-800/50 pt-6">
-                  <button 
-                    onClick={() => setIsCodeExpanded(false)} 
-                    className="flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm font-bold shadow-lg transition-all hover:-translate-y-0.5 border border-slate-700"
-                  >
-                    <ChevronUp className="w-4 h-4" />
-                    Recolher Código
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* Playground Section */}
-        <section id="playground" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 scroll-mt-20">
-          <div className="mb-12 text-center">
-            <h2 className="text-3xl font-bold font-display text-white mb-4">Playground Interativo</h2>
-            <p className="text-slate-400 max-w-2xl mx-auto">Teste a velocidade e resiliência do Nexus Engine em tempo real.</p>
-          </div>
-          <TestTab />
-        </section>
-
-        {/* API & Docs Section */}
-        <section id="api" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 bg-slate-900/20 scroll-mt-20">
-          <InfoTab nexusCode={nexusCode} />
-        </section>
-
-        {/* Settings Section */}
-        <section id="settings" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 scroll-mt-20">
-          <SettingsTab />
-        </section>
-
-        {/* FAQ Section */}
-        <FAQSection />
-      </main>
-      
-      <footer className="border-t border-slate-800/50 py-8 text-center text-slate-500 text-sm">
-        <p>Nexus Engine Ultra v2.5 &copy; 2026. Construído para alta performance.</p>
-      </footer>
+        <button className="md:hidden p-2 text-slate-400 hover:text-white transition-colors" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+          {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
+      </div>
 
       <AnimatePresence>
-        {showScrollTop && (
-          <motion.button
-            initial={{ opacity: 0, y: 20, scale: 0.8 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.8 }}
-            onClick={scrollToTop}
-            className="fixed bottom-8 right-8 z-50 p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-lg shadow-blue-900/20 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-950"
-            aria-label="Voltar ao topo"
+        {isMobileMenuOpen && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="md:hidden border-t border-slate-800/50 bg-slate-950/98 backdrop-blur-2xl overflow-hidden"
           >
-            <ArrowUp className="w-6 h-6" />
-          </motion.button>
+            <div className="px-6 py-8 flex flex-col gap-4">
+              {navLinks.map(link => (
+                <a key={link.href} href={link.href} onClick={(e) => handleNavClick(e, link.href)} className="text-lg font-bold text-slate-300 hover:text-white">
+                  {link.label}
+                </a>
+              ))}
+              <div className="border-t border-slate-800 pt-4 flex gap-4">
+                <Link to="/settings" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2 text-slate-300 hover:text-white">
+                  <Settings className="w-5 h-5" /> Configurações
+                </Link>
+                <Link to="/faq" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2 text-slate-300 hover:text-white">
+                  <MessageCircleQuestion className="w-5 h-5" /> Dúvidas
+                </Link>
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </nav>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500 selection:text-white overflow-x-hidden">
+        <Header />
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/faq" element={<FAQPage />} />
+        </Routes>
+        <footer className="border-t border-slate-800/50 py-8 text-center text-slate-500 text-sm">
+          <p>Nexus Engine Ultra v2.5 &copy; 2026. Construído para alta performance.</p>
+        </footer>
+      </div>
+    </BrowserRouter>
   );
 }
 
