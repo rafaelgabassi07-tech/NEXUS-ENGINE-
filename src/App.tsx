@@ -17,15 +17,29 @@ function Header() {
     setIsMobileMenuOpen(false);
     
     if (href.startsWith('#')) {
+      const targetId = href.replace('#', '');
+      
+      const scrollToElement = () => {
+        const element = document.getElementById(targetId);
+        if (element) {
+          const offset = 96; // Header height + padding
+          const bodyRect = document.body.getBoundingClientRect().top;
+          const elementRect = element.getBoundingClientRect().top;
+          const elementPosition = elementRect - bodyRect;
+          const offsetPosition = elementPosition - offset;
+
+          window.scrollTo({
+            top: offsetPosition,
+            behavior: 'smooth'
+          });
+        }
+      };
+
       if (location.pathname !== '/') {
         navigate('/');
-        setTimeout(() => {
-          const element = document.getElementById(href.replace('#', ''));
-          if (element) element.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
+        setTimeout(scrollToElement, 100);
       } else {
-        const element = document.getElementById(href.replace('#', ''));
-        if (element) element.scrollIntoView({ behavior: 'smooth' });
+        scrollToElement();
       }
     } else {
       navigate(href);

@@ -13,8 +13,8 @@ export function FAQSection() {
       a: "É uma técnica agressiva de otimização. Se estamos buscando o P/L de uma ação que está na linha 50 do HTML, assim que o Nexus lê a linha 50, ele corta a conexão TCP com o servidor alvo. Isso economiza o download das outras 1000 linhas do site, poupando banda e CPU."
     },
     {
-      q: "Posso usar em produção?",
-      a: "Sim. O Nexus foi desenhado para alta concorrência. Ele possui um pool de conexões nativo (Undici) e sistema de deduplicação de requisições (Request Coalescing), o que impede que seu servidor seja sobrecarregado mesmo com milhares de requisições simultâneas."
+      q: "Posso usar em produção Serverless (Vercel/AWS)?",
+      a: "Sim. O Nexus foi redesenhado para arquiteturas Serverless. Ele utiliza o fetch nativo do Node.js, não mantém estado persistente em memória (stateless) e possui controle de concorrência, o que impede que seu servidor seja sobrecarregado mesmo com milhares de requisições simultâneas."
     },
     {
       q: "Como ele lida com bloqueios (Rate Limits)?",
@@ -23,7 +23,7 @@ export function FAQSection() {
   ];
 
   return (
-    <section id="faq" className="max-w-7xl mx-auto px-6 py-24 border-t border-slate-800/50 bg-slate-900/20">
+    <div className="w-full">
       <div className="mb-12 text-center">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -45,13 +45,13 @@ export function FAQSection() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: i * 0.1 }}
-            className="glass rounded-2xl border border-slate-800/50 p-6"
+            className="bg-slate-900/50 rounded-2xl border border-slate-800/50 p-6"
           >
             <h3 className="text-lg font-bold text-white font-display mb-3">{faq.q}</h3>
             <p className="text-sm text-slate-400 leading-relaxed">{faq.a}</p>
           </motion.div>
         ))}
       </div>
-    </section>
+    </div>
   );
 }

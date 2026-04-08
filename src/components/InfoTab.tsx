@@ -40,13 +40,13 @@ const tickers = ['PETR4', 'VALE3', 'MXRF11', 'ITUB4', 'BBDC4'];
 const batch = await runNexusBatch(tickers, 'ACAO', 100);
 console.log("Processados " + batch.length + " ativos");`;
 
-  const expressExample = `import express from 'express';
-import { runNexusBatch } from './nexus-engine';
+  const serverlessExample = `import { runNexusBatch } from '../src/lib/nexus';
 
-const app = express();
-app.use(express.json());
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
 
-app.post('/api/scrape', async (req, res) => {
   try {
     const { tickers, type } = req.body;
     
@@ -54,16 +54,14 @@ app.post('/api/scrape', async (req, res) => {
       return res.status(400).json({ error: 'Tickers inválidos' });
     }
 
-    // Executa o Nexus Engine
+    // Executa o Nexus Engine (Stateless)
     const results = await runNexusBatch(tickers, type || 'ACAO', 50);
     
     res.json({ success: true, data: results });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
-});
-
-app.listen(3000, () => console.log('Nexus API rodando na porta 3000'));`;
+}`;
 
   return (
     <motion.div
@@ -145,21 +143,21 @@ app.listen(3000, () => console.log('Nexus API rodando na porta 3000'));`;
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-bold font-display text-white flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 text-xs">3</div>
-              Integração com Express.js (API REST)
+              Integração Serverless (Vercel)
             </h3>
             <button 
-              onClick={() => copyToClipboard(expressExample, 'express')}
+              onClick={() => copyToClipboard(serverlessExample, 'serverless')}
               className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-4 py-2 rounded-xl hover:bg-blue-500/20 transition-colors flex items-center gap-2 border border-blue-500/20"
             >
               <Copy className="w-3 h-3" />
-              {copied === 'express' ? 'Copiado!' : 'Copiar Código'}
+              {copied === 'serverless' ? 'Copiado!' : 'Copiar Código'}
             </button>
           </div>
           <p className="text-sm text-slate-400 mb-6 leading-relaxed">
-            Para expor o Nexus Engine como um microserviço, você pode envolvê-lo em uma rota do Express. O controle de concorrência garantirá que o servidor não trave sob alta carga.
+            Para expor o Nexus Engine como uma API Serverless no Vercel, crie um arquivo <code>api/scrape.ts</code>. O controle de concorrência garantirá que a função não estoure o limite de memória.
           </p>
           <pre className="p-6 bg-slate-950/80 text-blue-200 rounded-2xl overflow-x-auto text-xs font-mono leading-relaxed border border-slate-800 inner-shadow">
-            {expressExample}
+            {serverlessExample}
           </pre>
         </div>
 

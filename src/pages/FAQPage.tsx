@@ -5,7 +5,7 @@ import { FAQSection } from '../components/FAQSection';
 
 export function FAQPage() {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 p-6">
+    <div className="min-h-screen bg-slate-950 text-slate-200 p-6 pt-32">
       <div className="max-w-4xl mx-auto">
         <Link to="/" className="text-blue-400 hover:text-blue-300 mb-6 inline-block">&larr; Voltar para Home</Link>
         <h1 className="text-3xl font-bold text-white mb-6 flex items-center gap-3">
