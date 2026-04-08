@@ -2,72 +2,34 @@ import { request, Agent, interceptors } from 'undici';
 import { Parser } from 'htmlparser2';
 import { LRUCache } from 'lru-cache';
 import { performance } from 'perf_hooks';
-import YahooFinance from 'yahoo-finance2';
+import yahooFinance from 'yahoo-finance2';
+
+import { 
+  AssetType, 
+  AssetLabel, 
+  ResultMap, 
+  FetchMetrics, 
+  FetchSuccess, 
+  FetchAtivoResult, 
+  AssetPreset, 
+  Task,
+  ChartPeriod,
+  HistoricalQuote,
+  Dividend,
+  DataSource
+} from './nexus/types';
+
+import { 
+  delay, 
+  normalizeBRNumber, 
+  getRandomAgent 
+} from './nexus/utils';
 
 // ═══════════════════════════════════════════════════════════
-// TIPOS E INTERFACES
+// CONFIGURAÇÕES E CONSTANTES
 // ═══════════════════════════════════════════════════════════
 
-export type AssetType = 'ACAO' | 'FII';
-export type CacheStatus = 'HIT' | 'MISS' | 'DEDUPE' | 'ERROR';
-export type DataSource = 'Yahoo Finance API' | 'SAX Scraper (HTML)' | 'SAX Scraper + Yahoo Finance';
-
-export type AcaoLabel = 'P/L' | 'Dividend Yield' | 'P/VP' | 'VPA' | 'ROE' | 'ROIC' | 'Margem Líquida' | 'Margem Bruta' | 'Margem EBIT' | 'EV/EBITDA' | 'Dívida Líquida / Patrimônio' | 'CAGR Receitas 5 Anos' | 'LPA' | 'PEG Ratio';
-export type FiiLabel = 'Dividend Yield' | 'P/VP' | 'Valor Patrimonial' | 'Liquidez Diária' | 'Último Rendimento' | 'Vacância Física' | 'Vacância Financeira' | 'Quantidade Ativos';
-export type AssetLabel = AcaoLabel | FiiLabel;
-
-export type ResultMap = Partial<Record<AssetLabel, string>>;
-
-export type ChartPeriod = '1mo' | '3mo' | '6mo' | '1y' | '5y' | 'max';
-
-export interface HistoricalQuote {
-  date: Date;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
-export interface FetchMetrics {
-  totalTimeMs:    number;
-  bytesProcessed: number;
-  foundKeys:      AssetLabel[];
-  successRate:    number;
-  earlyAbort:     boolean;
-  source:         DataSource;
-}
-
-export interface FetchSuccess {
-  results: ResultMap;
-  metrics: FetchMetrics;
-}
-
-export interface AtivoBuscado extends FetchSuccess {
-  ticker:      string;
-  cacheStatus: CacheStatus;
-}
-
-export interface AtivoErro {
-  ticker:      string;
-  error:       string;
-  cacheStatus: 'ERROR';
-}
-
-export type FetchAtivoResult = AtivoBuscado | AtivoErro;
-
-interface AssetPreset {
-  url_base: string;
-  labels:   AssetLabel[];
-}
-
-type Task<T> = () => Promise<T>;
-
-// ═══════════════════════════════════════════════════════════
-// INSTÂNCIAS GLOBAIS E CONFIGURAÇÕES
-// ═══════════════════════════════════════════════════════════
-
-const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+(yahooFinance as any).setGlobalConfig({ suppressNotices: ['yahooSurvey'] });
 
 const CACHE = new LRUCache<string, FetchSuccess>({
   max: 1000,
@@ -76,56 +38,46 @@ const CACHE = new LRUCache<string, FetchSuccess>({
 
 const PENDING_REQUESTS = new Map<string, Promise<FetchSuccess>>();
 
-// CORREÇÃO: Removida a barra final para evitar "//" na concatenação
 const NEXUS_PRESETS: Record<AssetType, AssetPreset> = {
   ACAO: {
     url_base: 'https://investidor10.com.br/acoes',
-    labels:   ['P/L', 'Dividend Yield', 'P/VP', 'VPA', 'ROE', 'ROIC', 'Margem Líquida', 'Margem Bruta', 'Margem EBIT', 'EV/EBITDA', 'Dívida Líquida / Patrimônio', 'CAGR Receitas 5 Anos', 'LPA', 'PEG Ratio'],
+    labels: [
+      'P/L', 'Dividend Yield', 'P/VP', 'VPA', 'ROE', 'ROIC', 
+      'Margem Líquida', 'Margem Bruta', 'Margem EBIT', 'EV/EBITDA', 
+      'Dívida Líquida / Patrimônio', 'CAGR Receitas 5 Anos', 'LPA', 'PEG Ratio',
+      'P/EBIT', 'P/Ativo', 'PSR', 'Giro Ativos', 'Dívida Bruta / Patrimônio'
+    ],
   },
   FII: {
     url_base: 'https://investidor10.com.br/fiis',
-    labels:   ['Dividend Yield', 'P/VP', 'Valor Patrimonial', 'Liquidez Diária', 'Último Rendimento', 'Vacância Física', 'Vacância Financeira', 'Quantidade Ativos'],
+    labels: [
+      'Dividend Yield', 'P/VP', 'Valor Patrimonial', 'Liquidez Diária', 
+      'Último Rendimento', 'Vacância Física', 'Vacância Financeira', 'Quantidade Ativos',
+      'Patrimônio Líquido', 'Valor de Mercado', 'P/Ativo'
+    ],
   },
 } as const;
 
-const AGENTS: readonly string[] = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-] as const;
-
 const HTTP_DISPATCHER = new Agent({
-  keepAliveTimeout:    10_000,
+  keepAliveTimeout: 10_000,
   keepAliveMaxTimeout: 30_000,
 }).compose(interceptors.redirect({ maxRedirections: 5 }));
 
 // ═══════════════════════════════════════════════════════════
-// UTILITÁRIOS
+// ENGINE PRINCIPAL
 // ═══════════════════════════════════════════════════════════
 
-const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
-function normalizeBRNumber(raw: string): string {
-  const hasPercent = raw.includes('%');
-  const clean = raw.trim().replace(/\s+/g, ' ').replace('%', '').replace(/\./g, '').replace(',', '.');
-  return hasPercent ? `${clean}%` : clean;
-}
-
-// ═══════════════════════════════════════════════════════════
-// CLASSE PRINCIPAL
-// ═══════════════════════════════════════════════════════════
+export type { AssetType, FetchAtivoResult };
 
 export class NexusEngineUltra {
 
   static async fetchAtivo(
-    ticker:    string,
-    type:      AssetType = 'ACAO',
-    isRetry:   boolean   = false,
+    ticker: string,
+    type: AssetType = 'ACAO',
+    isRetry: boolean = false,
   ): Promise<FetchAtivoResult> {
-
     const cleanTicker = ticker.trim().replace(/\.SA$/i, '').toUpperCase();
     const preset = NEXUS_PRESETS[type];
-    
-    // CORREÇÃO: Construção de URL limpa
     const url = `${preset.url_base}/${cleanTicker.toLowerCase()}/`;
 
     // 1. Cache HIT
@@ -149,11 +101,8 @@ export class NexusEngineUltra {
       return { ticker: cleanTicker, ...result, cacheStatus: 'MISS' };
     } catch (error) {
       const err = error as Error;
-      
-      // LOG DE DEBUG
       console.error(`[NexusEngine] Falha em ${cleanTicker} (${type}): ${err.message}`);
 
-      // LÓGICA DE FALLBACK: Se der 404, tenta a outra categoria
       if (!isRetry && (err.message.includes('404') || err.message.includes('410'))) {
         const fallbackType: AssetType = type === 'ACAO' ? 'FII' : 'ACAO';
         return this.fetchAtivo(cleanTicker, fallbackType, true);
@@ -165,12 +114,11 @@ export class NexusEngineUltra {
   }
 
   private static async _executeFetchWithFallback(
-    ticker:    string,
-    url:       string,
-    labels:    AssetLabel[],
-    type:      AssetType,
+    ticker: string,
+    url: string,
+    labels: AssetLabel[],
+    type: AssetType,
   ): Promise<FetchSuccess> {
-
     const startTime = performance.now();
     let finalResults: ResultMap = {};
     let sourcesUsed: string[] = [];
@@ -190,14 +138,14 @@ export class NexusEngineUltra {
         return htmlResult; 
       }
     } catch (e) {
-      if ((e as Error).message.includes('404')) throw e; // Lança para o fallback de categoria
+      if ((e as Error).message.includes('404')) throw e;
       console.warn(`[NexusEngine] Scraper falhou para ${ticker}:`, (e as Error).message);
     }
 
     // --- FASE 2: Yahoo Finance (Complemento) ---
     try {
       const yahooSymbol = `${ticker.toUpperCase()}.SA`;
-      const quote = await yahooFinance.quote(yahooSymbol);
+      const quote: any = await yahooFinance.quote(yahooSymbol);
       let yahooAdded = false;
 
       const fill = (key: AssetLabel, val: any) => {
@@ -212,12 +160,12 @@ export class NexusEngineUltra {
         fill('P/VP', quote.priceToBook);
         fill('VPA', quote.bookValue);
         if (quote.trailingAnnualDividendYield) 
-            fill('Dividend Yield', (quote.trailingAnnualDividendYield * 100).toFixed(2) + '%');
+          fill('Dividend Yield', (quote.trailingAnnualDividendYield * 100).toFixed(2) + '%');
       } else {
         fill('P/VP', quote.priceToBook);
         fill('Valor Patrimonial', quote.bookValue);
         if (quote.trailingAnnualDividendYield)
-            fill('Dividend Yield', (quote.trailingAnnualDividendYield * 100).toFixed(2) + '%');
+          fill('Dividend Yield', (quote.trailingAnnualDividendYield * 100).toFixed(2) + '%');
       }
 
       if (yahooAdded) sourcesUsed.push('Yahoo Finance API');
@@ -231,12 +179,12 @@ export class NexusEngineUltra {
     return {
       results: finalResults,
       metrics: {
-        totalTimeMs:    performance.now() - startTime,
+        totalTimeMs: performance.now() - startTime,
         bytesProcessed: bytesTotal,
         foundKeys,
-        earlyAbort:     foundKeys.length >= labels.length,
-        successRate:    foundKeys.length / labels.length,
-        source:         sourcesUsed.join(' + ') as DataSource,
+        earlyAbort: foundKeys.length >= labels.length,
+        successRate: foundKeys.length / labels.length,
+        source: sourcesUsed.join(' + ') as DataSource,
       },
     };
   }
@@ -259,16 +207,16 @@ export class NexusEngineUltra {
   private static async _executeFetch(
     url: string, labels: AssetLabel[], globalStart: number
   ): Promise<FetchSuccess> {
-    const labelSet = new Set(labels.map(l => l.toLowerCase()));
     const labelMap: Record<string, AssetLabel> = {};
     labels.forEach(l => labelMap[l.toLowerCase()] = l);
 
+    // Aliases comuns
     labelMap['dy'] = 'Dividend Yield';
     labelMap['p/l'] = 'P/L';
     labelMap['p/vp'] = 'P/VP';
     labelMap['vpa'] = 'VPA';
     
-    const allLabels = new Set([...labelSet, 'dy']);
+    const allLabels = new Set(Object.keys(labelMap));
     const abortCtrl = new AbortController();
     const timeoutId = setTimeout(() => abortCtrl.abort(), 15000);
 
@@ -317,7 +265,7 @@ export class NexusEngineUltra {
           depth--;
           if (depth === 0 && lastLabel) {
             const normalized = normalizeBRNumber(buffer);
-            if (normalized && normalized !== '-' && normalized !== '0.00' && normalized !== '0,00%') {
+            if (normalized) {
               results[lastLabel] = normalized;
               foundCount++;
               lastLabel = '';
@@ -332,7 +280,7 @@ export class NexusEngineUltra {
       const { statusCode, body } = await request(url, {
         dispatcher: HTTP_DISPATCHER,
         headers: { 
-          'User-Agent': AGENTS[Math.floor(Math.random() * AGENTS.length)],
+          'User-Agent': getRandomAgent(),
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
           'Accept-Language': 'pt-BR,pt;q=0.9',
           'Referer': 'https://investidor10.com.br/',
@@ -376,14 +324,37 @@ export class NexusEngineUltra {
   static async fetchHistoricoGrafico(ticker: string, period: ChartPeriod = '1y'): Promise<HistoricalQuote[]> {
     try {
       const yahooSymbol = `${ticker.toUpperCase()}.SA`;
-      const result = await yahooFinance.historical(yahooSymbol, {
-        period1: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000), // Ex: 1 ano
+      const result: any = await yahooFinance.historical(yahooSymbol, {
+        period1: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000), 
         period2: new Date(),
         interval: '1d'
       });
       return result.map(r => ({ ...r, date: new Date(r.date) }));
     } catch (e) {
       throw new Error(`Yahoo Histórico Falhou: ${ticker}`);
+    }
+  }
+
+  static async fetchDividends(ticker: string): Promise<Dividend[]> {
+    try {
+      const yahooSymbol = `${ticker.toUpperCase()}.SA`;
+      const result: any = await (yahooFinance as any).dividends(yahooSymbol, {
+        period1: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000 * 5), // 5 anos
+        period2: new Date(),
+      });
+      return result.map(r => ({ date: new Date(r.date), amount: r.dividend }));
+    } catch (e) {
+      throw new Error(`Yahoo Dividendos Falhou: ${ticker}`);
+    }
+  }
+
+  static async searchTicker(query: string): Promise<any[]> {
+    try {
+      const result: any = await yahooFinance.search(query);
+      return result.quotes.filter((q: any) => q.exchange === 'SAO' || (q.symbol && q.symbol.endsWith('.SA')));
+    } catch (e) {
+      console.warn(`[NexusEngine] Busca falhou para ${query}:`, (e as Error).message);
+      return [];
     }
   }
 }
