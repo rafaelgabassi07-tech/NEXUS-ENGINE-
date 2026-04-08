@@ -76,20 +76,21 @@ const CACHE = new LRUCache<string, FetchSuccess>({
 
 const PENDING_REQUESTS = new Map<string, Promise<FetchSuccess>>();
 
+// CORREÇÃO: Removida a barra final para evitar "//" na concatenação
 const NEXUS_PRESETS: Record<AssetType, AssetPreset> = {
   ACAO: {
-    url_base: 'https://investidor10.com.br/acoes/',
+    url_base: 'https://investidor10.com.br/acoes',
     labels:   ['P/L', 'Dividend Yield', 'P/VP', 'VPA', 'ROE', 'ROIC', 'Margem Líquida', 'Margem Bruta', 'Margem EBIT', 'EV/EBITDA', 'Dívida Líquida / Patrimônio', 'CAGR Receitas 5 Anos', 'LPA', 'PEG Ratio'],
   },
   FII: {
-    url_base: 'https://investidor10.com.br/fiis/',
+    url_base: 'https://investidor10.com.br/fiis',
     labels:   ['Dividend Yield', 'P/VP', 'Valor Patrimonial', 'Liquidez Diária', 'Último Rendimento', 'Vacância Física', 'Vacância Financeira', 'Quantidade Ativos'],
   },
 } as const;
 
 const AGENTS: readonly string[] = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
 ] as const;
 
 const HTTP_DISPATCHER = new Agent({
@@ -123,7 +124,9 @@ export class NexusEngineUltra {
 
     const cleanTicker = ticker.trim().replace(/\.SA$/i, '').toUpperCase();
     const preset = NEXUS_PRESETS[type];
-    const url    = `${preset.url_base}${cleanTicker.toLowerCase()}/`;
+    
+    // CORREÇÃO: Construção de URL limpa
+    const url = `${preset.url_base}/${cleanTicker.toLowerCase()}/`;
 
     // 1. Cache HIT
     const cached = CACHE.get(url);
@@ -134,7 +137,7 @@ export class NexusEngineUltra {
       try {
         const result = await PENDING_REQUESTS.get(url)!;
         return { ticker: cleanTicker, ...result, cacheStatus: 'DEDUPE' };
-      } catch { /* segue para nova tentativa */ }
+      } catch { /* erro na pendente, tenta nova */ }
     }
 
     const fetchPromise = this._executeFetchWithFallback(cleanTicker, url, preset.labels, type);
@@ -146,6 +149,11 @@ export class NexusEngineUltra {
       return { ticker: cleanTicker, ...result, cacheStatus: 'MISS' };
     } catch (error) {
       const err = error as Error;
+      
+      // LOG DE DEBUG
+      console.error(`[NexusEngine] Falha em ${cleanTicker} (${type}): ${err.message}`);
+
+      // LÓGICA DE FALLBACK: Se der 404, tenta a outra categoria
       if (!isRetry && (err.message.includes('404') || err.message.includes('410'))) {
         const fallbackType: AssetType = type === 'ACAO' ? 'FII' : 'ACAO';
         return this.fetchAtivo(cleanTicker, fallbackType, true);
@@ -156,9 +164,6 @@ export class NexusEngineUltra {
     }
   }
 
-  /**
-   * Executa a coleta com merge inteligente de fontes
-   */
   private static async _executeFetchWithFallback(
     ticker:    string,
     url:       string,
@@ -173,7 +178,7 @@ export class NexusEngineUltra {
 
     // --- FASE 1: HTML Scraper ---
     try {
-      const htmlResult = await this._executeFetchWithRetry(url, labels, 3, startTime);
+      const htmlResult = await this._executeFetchWithRetry(url, labels, 2, startTime);
       finalResults = { ...htmlResult.results };
       bytesTotal = htmlResult.metrics.bytesProcessed;
       
@@ -185,6 +190,7 @@ export class NexusEngineUltra {
         return htmlResult; 
       }
     } catch (e) {
+      if ((e as Error).message.includes('404')) throw e; // Lança para o fallback de categoria
       console.warn(`[NexusEngine] Scraper falhou para ${ticker}:`, (e as Error).message);
     }
 
@@ -244,7 +250,7 @@ export class NexusEngineUltra {
       } catch (err) {
         const isTerminal = i === retries - 1 || (err as Error).message.includes('404');
         if (isTerminal) throw err;
-        await delay(500 * (i + 1));
+        await delay(800 * (i + 1));
       }
     }
     throw new Error("Retry exhausted");
@@ -257,19 +263,14 @@ export class NexusEngineUltra {
     const labelMap: Record<string, AssetLabel> = {};
     labels.forEach(l => labelMap[l.toLowerCase()] = l);
 
-    // Adicionar mapeamentos comuns
     labelMap['dy'] = 'Dividend Yield';
     labelMap['p/l'] = 'P/L';
     labelMap['p/vp'] = 'P/VP';
     labelMap['vpa'] = 'VPA';
-    labelMap['roe'] = 'ROE';
-    labelMap['roic'] = 'ROIC';
-    labelMap['lpa'] = 'LPA';
     
     const allLabels = new Set([...labelSet, 'dy']);
-
     const abortCtrl = new AbortController();
-    const timeoutId = setTimeout(() => abortCtrl.abort(), 12000);
+    const timeoutId = setTimeout(() => abortCtrl.abort(), 15000);
 
     const results: ResultMap = {};
     let foundCount = 0;
@@ -278,54 +279,38 @@ export class NexusEngineUltra {
     let depth = 0;
     let buffer = '';
 
-    const ignoreTags = new Set(['script', 'style', 'option', 'title', 'meta', 'th', 'h1', 'h2', 'h3', 'p', 'footer', 'nav', 'header']);
+    const ignoreTags = new Set(['script', 'style', 'option', 'title', 'meta', 'footer', 'nav', 'header']);
     let ignoreDepth = 0;
 
     const parser = new Parser({
       onopentag(name, attr) {
-        if (ignoreTags.has(name)) {
-          ignoreDepth++;
-          return;
-        }
+        if (ignoreTags.has(name)) { ignoreDepth++; return; }
         if (ignoreDepth > 0) return;
 
         const isValueClass = attr.class?.split(/\s+/).some(c => c === 'value' || c === 'v-value' || c === '_card-body');
-        
         if (isValueClass) {
           if (depth === 0) buffer = '';
           depth++;
-        } else if (depth > 0) {
-          depth++;
-        }
+        } else if (depth > 0) { depth++; }
 
-        // Check for title attribute in header spans
         if (attr.title && allLabels.has(attr.title.toLowerCase())) {
           lastLabel = labelMap[attr.title.toLowerCase()];
         }
       },
       ontext(t) {
         if (ignoreDepth > 0) return;
-        
-        if (depth > 0) {
-          buffer += t;
-          return;
-        }
+        if (depth > 0) { buffer += t; return; }
 
         const txt = t.trim();
         if (!txt || txt.length > 50) return;
-
-        const cleanTxt = txt.endsWith(':') ? txt.slice(0, -1).trim() : txt;
-        const lowerTxt = cleanTxt.toLowerCase();
+        const lowerTxt = txt.endsWith(':') ? txt.slice(0, -1).toLowerCase() : txt.toLowerCase();
         
         if (allLabels.has(lowerTxt)) {
           lastLabel = labelMap[lowerTxt];
         }
       },
       onclosetag(name) {
-        if (ignoreTags.has(name)) {
-          ignoreDepth--;
-          return;
-        }
+        if (ignoreTags.has(name)) { ignoreDepth--; return; }
         if (ignoreDepth > 0) return;
 
         if (depth > 0) {
@@ -349,18 +334,18 @@ export class NexusEngineUltra {
         headers: { 
           'User-Agent': AGENTS[Math.floor(Math.random() * AGENTS.length)],
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-          'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-          'Upgrade-Insecure-Requests': '1',
-          'Sec-Fetch-Dest': 'document',
-          'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-Site': 'none',
-          'Sec-Fetch-User': '?1',
-          'Cache-Control': 'max-age=0'
+          'Accept-Language': 'pt-BR,pt;q=0.9',
+          'Referer': 'https://investidor10.com.br/',
+          'Origin': 'https://investidor10.com.br',
+          'Cache-Control': 'no-cache'
         },
         signal: abortCtrl.signal,
       });
 
-      if (statusCode !== 200) throw new Error(`HTTP ${statusCode}`);
+      if (statusCode !== 200) {
+        await body.dump();
+        throw new Error(`HTTP ${statusCode}`);
+      }
 
       for await (const chunk of body) {
         bytesProcessed += (chunk as Buffer).length;
@@ -386,45 +371,19 @@ export class NexusEngineUltra {
     };
   }
 
-  static clearCache() {
-    CACHE.clear();
-  }
+  static clearCache() { CACHE.clear(); }
 
-  static async fetchHistoricoGrafico(
-    ticker: string,
-    period: ChartPeriod = '1y'
-  ): Promise<HistoricalQuote[]> {
+  static async fetchHistoricoGrafico(ticker: string, period: ChartPeriod = '1y'): Promise<HistoricalQuote[]> {
     try {
       const yahooSymbol = `${ticker.toUpperCase()}.SA`;
-      const now = new Date();
-      const past = new Date();
-
-      switch (period) {
-        case '1mo': past.setMonth(now.getMonth() - 1); break;
-        case '3mo': past.setMonth(now.getMonth() - 3); break;
-        case '6mo': past.setMonth(now.getMonth() - 6); break;
-        case '1y':  past.setFullYear(now.getFullYear() - 1); break;
-        case '5y':  past.setFullYear(now.getFullYear() - 5); break;
-        case 'max': past.setFullYear(1990); break;
-      }
-
       const result = await yahooFinance.historical(yahooSymbol, {
-        period1: past,
-        period2: now,
+        period1: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000), // Ex: 1 ano
+        period2: new Date(),
         interval: '1d'
       });
-
-      return result.map(r => ({
-        date: r.date,
-        open: r.open,
-        high: r.high,
-        low: r.low,
-        close: r.close,
-        volume: r.volume
-      }));
-    } catch (error) {
-      console.error(`[NexusEngine] Erro ao buscar histórico para ${ticker}:`, error);
-      throw new Error(`Falha ao buscar histórico de cotações para ${ticker}`);
+      return result.map(r => ({ ...r, date: new Date(r.date) }));
+    } catch (e) {
+      throw new Error(`Yahoo Histórico Falhou: ${ticker}`);
     }
   }
 }
