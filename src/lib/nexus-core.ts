@@ -15,13 +15,13 @@ import {
   HistoricalQuote,
   Dividend,
   DataSource
-} from './nexus/types';
+} from './nexus/types.js';
 
 import { 
   delay, 
   normalizeBRNumber, 
   getRandomAgent 
-} from './nexus/utils';
+} from './nexus/utils.js';
 
 // ═══════════════════════════════════════════════════════════
 // CONFIGURAÇÕES E CONSTANTES
