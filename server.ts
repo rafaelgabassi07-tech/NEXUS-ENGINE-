@@ -2,6 +2,7 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { runNexusBatch, NexusEngineUltra } from "./src/lib/nexus-core.js";
+import { runLegacyScraper } from "./src/lib/legacy-scraper.js";
 
 async function startServer() {
   const app = express();
@@ -53,6 +54,42 @@ async function startServer() {
   app.post("/api/clear-cache", (req, res) => {
     NexusEngineUltra.clearCache();
     res.json({ success: true });
+  });
+
+  app.get("/api/stats", (req, res) => {
+    res.json(NexusEngineUltra.getCacheStats());
+  });
+
+  app.post("/api/benchmark-compare", async (req, res) => {
+    try {
+      const { tickers } = req.body;
+      if (!tickers || !Array.isArray(tickers)) {
+        return res.status(400).json({ error: "Invalid tickers" });
+      }
+
+      // Clear cache to ensure fair race
+      NexusEngineUltra.clearCache();
+
+      // Run Legacy
+      const legacyStart = performance.now();
+      const legacyResults = await runLegacyScraper(tickers);
+      const legacyTime = performance.now() - legacyStart;
+
+      // Clear cache again
+      NexusEngineUltra.clearCache();
+
+      // Run Nexus
+      const nexusStart = performance.now();
+      const nexusResults = await runNexusBatch(tickers, 'ACAO', undefined, false);
+      const nexusTime = performance.now() - nexusStart;
+
+      res.json({
+        legacy: { time: legacyTime, results: legacyResults },
+        nexus: { time: nexusTime, results: nexusResults }
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   if (process.env.NODE_ENV !== "production") {
