@@ -31,6 +31,7 @@ interface ExtendedAssetPreset extends AssetPreset {
   url_base: string;
   labels: AssetLabel[]; 
   statusInvest_base?: string;
+  searchPath?: string;
   aliases?: Record<string, AssetLabel>;
   htmlClasses: Record<ScraperSource, string[]>;
 }
@@ -89,6 +90,7 @@ function getHeadersConsistentes(userAgent: string, url: string, ticker?: string)
   const urlObj = new URL(url);
   const domain = urlObj.hostname;
   const isStatusInvest = domain.includes('statusinvest');
+  const isMobile = Math.random() < 0.7;
   
   const lang = Math.random() > 0.5 ? 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7' : 'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3';
   
@@ -100,7 +102,7 @@ function getHeadersConsistentes(userAgent: string, url: string, ticker?: string)
     'Cache-Control': 'max-age=0',
     'Connection': 'keep-alive',
     'Sec-Ch-Ua': `"Not_A Brand";v="8", "Chromium";v="${v}", "Google Chrome";v="${v}"`,
-    'Sec-Ch-Ua-Mobile': '?0',
+    'Sec-Ch-Ua-Mobile': isMobile ? '?1' : '?0',
     'Sec-Ch-Ua-Platform': '"Windows"',
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
@@ -111,9 +113,14 @@ function getHeadersConsistentes(userAgent: string, url: string, ticker?: string)
   };
 
   if (isStatusInvest) {
-    // StatusInvest is very sensitive to Referer. 
-    // Sometimes it expects the home page or a search page.
-    headers['Referer'] = ticker ? `https://statusinvest.com.br/acoes/${ticker.toLowerCase()}` : 'https://statusinvest.com.br/';
+    const referersSI = ticker ? [
+      `https://statusinvest.com.br/search?q=${ticker.toLowerCase()}`,
+      `https://statusinvest.com.br/acoes/${ticker.toLowerCase()}`,
+      "https://statusinvest.com.br/"
+    ] : ["https://statusinvest.com.br/"];
+    
+    headers['Referer'] = referersSI[Math.floor(Math.random() * referersSI.length)];
+    headers['X-Requested-With'] = 'XMLHttpRequest';
   } else {
     headers['Referer'] = `https://${domain}/`;
   }
@@ -188,6 +195,7 @@ const NEXUS_PRESETS: Record<ExtendedAssetType, ExtendedAssetPreset> = {
   ACAO: {
     url_base: 'https://investidor10.com.br/acoes',
     statusInvest_base: 'https://statusinvest.com.br/acoes',
+    searchPath: 'search?q=',
     labels: ['P/L', 'Dividend Yield', 'P/VP', 'VPA', 'ROE', 'ROIC', 'Margem Líquida', 'Margem Bruta', 'Margem EBIT', 'EV/EBITDA', 'Dívida Líquida / Patrimônio', 'CAGR Receitas 5 Anos', 'LPA', 'PEG Ratio', 'P/EBIT', 'P/Ativo', 'PSR', 'Giro Ativos', 'Dívida Bruta / Patrimônio', 'Preço Atual', 'Variação (24h)', 'Setor', 'Subsetor', 'Segmento'],
     aliases: { 
       'dy': 'Dividend Yield', 'p/l': 'P/L', 'p/vp': 'P/VP', 'vpa': 'VPA', 'lpa': 'LPA', 'roe': 'ROE', 'roic': 'ROIC', 'psr': 'PSR', 'p/ativo': 'P/Ativo', 
@@ -357,20 +365,33 @@ export class NexusEngineUltra {
     }
 
     if (Object.keys(finalResults).length < preset.labels.length && preset.statusInvest_base) {
-      await delay(Math.random() * 1000 + 500); // Delay humano entre fontes
+      await delay(3000 + Math.random() * 2000); // Delay humano entre fontes (Nexus v8)
       const cbSI = `statusInvest:${ticker}`;
       if (!this._cb.estaAberto(cbSI)) {
-        const urlSI = `${preset.statusInvest_base}/${ticker.toLowerCase()}/`;
-        customTemplate.htmlClasses = preset.htmlClasses['statusInvest'];
         try {
-          const r15 = await this._executeFetchWithRetry(urlSI, customTemplate, 'statusInvest', 1, startTime, log, ticker);
+          // Tenta busca primeiro para "aquecer" a sessão no WAF
+          const searchUrl = `https://statusinvest.com.br/${preset.searchPath || "search?q="}${ticker.toLowerCase()}`;
+          log(`Iniciando busca prévia no StatusInvest: ${ticker}`);
+          await this._executeFetchWithRetry(searchUrl, customTemplate, 'statusInvest', 1, startTime, log, ticker);
+
+          const urlSI = `${preset.statusInvest_base}/${ticker.toLowerCase()}/`;
+          customTemplate.htmlClasses = preset.htmlClasses['statusInvest'];
+          
+          const r15 = await this._executeFetchWithRetry(urlSI, customTemplate, 'statusInvest', 2, startTime, log, ticker);
           bytesTotal += r15.metrics.bytesProcessed;
           let added = 0;
           for (const [k, v] of Object.entries(r15.results)) {
             if (finalResults[k as AssetLabel] === undefined) { finalResults[k as AssetLabel] = v; added++; }
           }
-          if (added > 0) { sourcesUsed.add('StatusInvest'); this._cb.registrarSucesso(cbSI); }
-        } catch (e) { log(`Fase 1.5 falhou: ${(e as Error).message}`); this._cb.registrarFalha(cbSI); }
+          if (added > 0) { 
+            sourcesUsed.add('StatusInvest'); 
+            this._cb.registrarSucesso(cbSI);
+            log(`Fase 1.5 concluída: ${added} novos indicadores obtidos via StatusInvest.`);
+          }
+        } catch (e) { 
+          log(`Fase 1.5 falhou: ${(e as Error).message}`); 
+          this._cb.registrarFalha(cbSI); 
+        }
       }
     }
 
