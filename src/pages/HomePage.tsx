@@ -95,95 +95,113 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 pt-20 pb-32 text-center relative z-10">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-widest mb-8 shadow-[0_0_20px_rgba(59,130,246,0.15)]"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-widest mb-10 shadow-[0_0_30px_rgba(59,130,246,0.2)]"
         >
-          <Zap className="w-4 h-4" />
+          <Zap className="w-4 h-4 animate-pulse" />
           <span>Nexus Engine 9.0-Ultra Lançado</span>
         </motion.div>
+        
         <motion.h1 
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="text-6xl md:text-8xl font-extrabold tracking-tight font-display text-transparent bg-clip-text bg-gradient-to-b from-white via-blue-50 to-slate-400 mb-8 drop-shadow-sm"
+          transition={{ delay: 0.1, duration: 0.8, ease: "easeOut" }}
+          className="text-7xl md:text-9xl font-extrabold tracking-tighter font-display text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-slate-500 mb-10 leading-[0.9] drop-shadow-2xl"
         >
           A Engine de Extração<br />Definitiva.
         </motion.h1>
+        
         <motion.p 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="text-xl md:text-2xl text-slate-300 max-w-3xl mx-auto mb-12 leading-relaxed font-light"
+          transition={{ delay: 0.2, duration: 0.8 }}
+          className="text-xl md:text-3xl text-slate-400 max-w-4xl mx-auto mb-16 leading-relaxed font-light tracking-tight"
         >
-          Construído para performance extrema. O Nexus Engine 9.0-Ultra combina Orquestração Híbrida, Radar Heurístico e Cache SWR para entregar dados financeiros em milissegundos.
+          Construído para performance extrema. O <span className="text-white font-medium">Nexus Engine 9.0-Ultra</span> combina Orquestração Híbrida, Radar Heurístico e Cache SWR para entregar dados financeiros em milissegundos.
         </motion.p>
+        
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="flex flex-col sm:flex-row items-center justify-center gap-4"
+          transition={{ delay: 0.3, duration: 0.8 }}
+          className="flex flex-col sm:flex-row items-center justify-center gap-6"
         >
           <a 
             href="#playground" 
             onClick={(e) => handleNavClick(e, '#playground')}
-            className="w-full sm:w-auto px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-lg transition-all shadow-[0_0_30px_rgba(37,99,235,0.3)] hover:shadow-[0_0_40px_rgba(37,99,235,0.5)] hover:-translate-y-1 flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-10 py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold text-xl transition-all shadow-[0_0_40px_rgba(37,99,235,0.4)] hover:shadow-[0_0_60px_rgba(37,99,235,0.6)] hover:-translate-y-1.5 flex items-center justify-center gap-3 group"
           >
-            <Play className="w-5 h-5" />
+            <Play className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
             Testar no Playground
           </a>
           <a 
             href="#api" 
             onClick={(e) => handleNavClick(e, '#api')}
-            className="w-full sm:w-auto px-8 py-4 glass hover:bg-slate-800/80 text-white rounded-xl font-bold text-lg transition-all border border-slate-700 hover:border-slate-600 hover:-translate-y-1 flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-10 py-5 glass-dark hover:bg-slate-800/80 text-white rounded-2xl font-bold text-xl transition-all border border-white/10 hover:border-white/20 hover:-translate-y-1.5 flex items-center justify-center gap-3"
           >
-            <Code2 className="w-5 h-5" />
+            <Code2 className="w-6 h-6 text-blue-400" />
             Ver Documentação
           </a>
-          <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto px-6 py-4 bg-slate-900/50 hover:bg-slate-800 text-slate-300 rounded-xl font-bold text-lg transition-all border border-slate-800 hover:-translate-y-1 flex items-center justify-center gap-2 group">
-            <svg className="w-5 h-5 fill-current group-hover:text-white transition-colors" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.041-1.412-4.041-1.412-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-            GitHub
-          </a>
         </motion.div>
+
+        {/* Floating Elements for visual depth */}
+        <div className="absolute top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-600/10 blur-[120px] rounded-full animate-float pointer-events-none"></div>
+        <div className="absolute top-1/3 right-0 translate-x-1/2 w-64 h-64 bg-indigo-600/10 blur-[100px] rounded-full animate-float pointer-events-none" style={{ animationDelay: '-3s' }}></div>
       </section>
 
       {/* Benchmark Section */}
-      <section id="benchmark" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-24 border-t border-slate-800/50 scroll-mt-32">
-        <div className="mb-12 text-center">
-          <h2 className="text-3xl font-bold font-display text-white mb-4">Performance Incomparável</h2>
-          <p className="text-slate-400 max-w-2xl mx-auto">Métricas reais extraídas do núcleo da engine comparando a arquitetura legada com o novo Nexus Core.</p>
+      <section id="benchmark" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-32 border-t border-white/5 scroll-mt-32">
+        <div className="mb-16 text-center">
+          <motion.h2 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-4xl md:text-6xl font-bold font-display text-white mb-6 tracking-tighter"
+          >
+            Performance Incomparável
+          </motion.h2>
+          <motion.p 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.1 }}
+            className="text-slate-400 max-w-2xl mx-auto text-lg"
+          >
+            Métricas reais extraídas do núcleo da engine comparando a arquitetura legada com o novo Nexus Core.
+          </motion.p>
         </div>
         <BenchmarkTab />
       </section>
 
-      {/* Statistics Section */}
-      <section id="stats" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-24 border-t border-slate-800/50 relative scroll-mt-32">
-        <div className="absolute inset-0 bg-blue-500/5 blur-[100px] rounded-full pointer-events-none"></div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 relative z-10">
+      {/* Statistics Section - Bento Grid Style */}
+      <section id="stats" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-32 border-t border-white/5 relative scroll-mt-32">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative z-10">
           {[
-            { label: 'Concorrência Máxima', value: '5 reqs/lote', icon: <Globe className="w-5 h-5" />, color: 'blue' },
-            { label: 'Parser HTML', value: 'Zero-AST', icon: <Zap className="w-5 h-5" />, color: 'emerald' },
-            { label: 'Tentativas (Retries)', value: 'Até 2x', icon: <Activity className="w-5 h-5" />, color: 'blue' },
-            { label: 'Alocação de Memória', value: 'O(1)', icon: <BarChart3 className="w-5 h-5" />, color: 'indigo' }
+            { label: 'Concorrência Máxima', value: '5 reqs/lote', icon: <Globe className="w-6 h-6" />, color: 'blue', desc: 'Processamento paralelo otimizado.' },
+            { label: 'Parser HTML', value: 'Zero-AST', icon: <Zap className="w-6 h-6" />, color: 'emerald', desc: 'Extração direta sem overhead de DOM.' },
+            { label: 'Tentativas (Retries)', value: 'Até 2x', icon: <Activity className="w-6 h-6" />, color: 'blue', desc: 'Resiliência contra falhas temporárias.' },
+            { label: 'Alocação de Memória', value: 'O(1)', icon: <BarChart3 className="w-6 h-6" />, color: 'indigo', desc: 'Consumo constante independente do tamanho.' }
           ].map((stat, i) => (
             <motion.div
               key={i}
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              whileInView={{ opacity: 1, scale: 1, y: 0 }}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.1, type: "spring", stiffness: 100 }}
-              className="glass border border-slate-800/50 p-6 rounded-3xl text-center group hover:bg-slate-800/60 transition-all card-hover"
+              transition={{ delay: i * 0.1 }}
+              className="glass-dark border border-white/5 p-8 rounded-4xl group hover:bg-slate-900/40 transition-all card-hover technical-border"
             >
               <div className={cn(
-                "w-12 h-12 rounded-2xl mx-auto mb-4 flex items-center justify-center border transition-transform group-hover:scale-110",
+                "w-14 h-14 rounded-2xl mb-6 flex items-center justify-center border transition-all group-hover:scale-110 group-hover:rotate-3",
                 stat.color === 'blue' ? "bg-blue-500/10 border-blue-500/20 text-blue-400" :
                 stat.color === 'emerald' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" :
                 "bg-indigo-500/10 border-indigo-500/20 text-indigo-400"
               )}>
                 {stat.icon}
               </div>
-              <p className="text-2xl font-bold text-white font-display mb-1">{stat.value}</p>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{stat.label}</p>
+              <p className="text-3xl font-bold text-white font-display mb-2">{stat.value}</p>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-4">{stat.label}</p>
+              <p className="text-sm text-slate-400 leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-500">{stat.desc}</p>
             </motion.div>
           ))}
         </div>
