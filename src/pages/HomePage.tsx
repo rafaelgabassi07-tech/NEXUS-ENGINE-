@@ -259,17 +259,20 @@ export default function HomePage() {
             <div className="flex items-center gap-3">
               <button 
                 onClick={handleDownload}
-                className="text-[10px] font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors"
-                title="Baixar arquivo .ts"
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded-lg flex items-center gap-1.5 transition-all shadow-lg shadow-blue-900/20 active:scale-95 group"
+                title="Baixar arquivo .ts completo"
               >
-                <Download className="w-3 h-3" />
-                Baixar
+                <Download className="w-3.5 h-3.5 group-hover:animate-bounce" />
+                Baixar Engine (.ts)
               </button>
               <button 
-                onClick={() => navigator.clipboard.writeText(nexusCode)}
-                className="text-[10px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors"
+                onClick={() => {
+                  navigator.clipboard.writeText(nexusCode);
+                  // Optional: add a toast or feedback here
+                }}
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[10px] font-bold rounded-lg flex items-center gap-1.5 transition-all border border-slate-700 active:scale-95"
               >
-                <Copy className="w-3 h-3" />
+                <Copy className="w-3.5 h-3.5" />
                 Copiar
               </button>
             </div>

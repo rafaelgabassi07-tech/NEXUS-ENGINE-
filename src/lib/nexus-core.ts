@@ -1,4 +1,5 @@
 import { Parser } from 'htmlparser2';
+import * as cheerio from 'cheerio';
 import { performance } from 'perf_hooks';
 
 import {
@@ -1064,38 +1065,28 @@ export class NexusEngineUltra {
       );
       if (!r.ok) return [];
 
+      const xml = await r.text();
+      const $ = cheerio.load(xml, { xmlMode: true });
       const news: NewsItem[] = [];
-      let curr: Partial<NewsItem> | null = null;
-      let tag = '';
-      let _pubDateStr = '';
 
-      const p = new Parser({
-        onopentag(n) { const t = n.toLowerCase(); if (t === 'item') { curr = {}; _pubDateStr = ''; } tag = t; },
-        ontext(t) {
-          if (!curr) return;
-          if (tag === 'title')   curr.title   = (curr.title   || '') + t;
-          if (tag === 'link')    curr.link    = (curr.link    || '') + t;
-          if (tag === 'pubdate') _pubDateStr += t;
-          if (tag === 'source')  curr.source  = (curr.source  || '') + t;
-        },
-        onclosetag(n) {
-          const lower = n.toLowerCase();
-          if (lower === 'pubdate' && curr && _pubDateStr) {
-            const d = new Date(_pubDateStr);
-            if (!isNaN(d.getTime())) curr.pubDate = d;
-          }
-          if (lower === 'item' && curr?.title && curr?.link) {
-            news.push(curr as NewsItem);
-            curr = null;
-          }
-          tag = '';
-        },
-      }, { xmlMode: true });
+      $('item').each((_, el) => {
+        const $el = $(el);
+        const pubDateStr = $el.find('pubDate').text();
+        const pubDate = new Date(pubDateStr);
+        
+        news.push({
+          title: $el.find('title').text(),
+          link: $el.find('link').text(),
+          pubDate: !isNaN(pubDate.getTime()) ? pubDate : new Date(),
+          source: $el.find('source').text()
+        });
+      });
 
-      p.write(await r.text());
-      p.end();
       return news;
-    } catch (e) { return []; }
+    } catch (e) { 
+      console.error(`Erro ao buscar notícias para ${ticker}:`, e);
+      return []; 
+    }
   }
 
   // ── Cache ────────────────────────────────────────────────────────────────

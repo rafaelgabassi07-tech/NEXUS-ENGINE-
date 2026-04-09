@@ -93,43 +93,16 @@ export function TestTab() {
         <p className="text-slate-400 mt-2">Execute testes de extração em tempo real contra a infraestrutura Nexus.</p>
       </div>
 
-      <div className="glass rounded-3xl border border-slate-800/50 p-4 sm:p-6 shadow-2xl card-shadow mb-8 relative overflow-hidden group">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full -mr-32 -mt-32 blur-3xl group-hover:bg-blue-500/10 transition-colors duration-500" />
-        <div className="relative z-10 flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
-          <div className="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20 hidden sm:block shrink-0">
-            <Info className="w-6 h-6 text-blue-400" />
-          </div>
-          <div>
-            <h3 className="text-lg sm:text-xl font-bold font-display text-white mb-2 flex items-center gap-2">
-              <Info className="w-4 h-4 text-blue-400 sm:hidden" />
-              Como funciona o teste?
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed mb-4 max-w-3xl">
-              Ao clicar em "Executar Scraper", o Nexus Engine v9.0-Ultra irá disparar a Orquestração Híbrida. Ele consulta múltiplas fontes em paralelo, deduplica requisições idênticas e usa o Radar Heurístico para extrair dados mesmo sob mudanças de layout. 
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { label: '1. Handshake', color: 'slate' },
-                { label: '2. Stream', color: 'slate' },
-                { label: '3. SAX Parsing', color: 'blue' },
-                { label: '4. Early Abort', color: 'emerald' }
-              ].map((step, i) => (
-                <span key={i} className={cn(
-                  "text-[8px] sm:text-[10px] font-bold px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl border shadow-sm uppercase tracking-widest",
-                  step.color === 'slate' ? "bg-slate-800/50 text-slate-300 border-slate-700/50" :
-                  step.color === 'blue' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
-                  "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                )}>
-                  {step.label}
-                </span>
-              ))}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 glass rounded-3xl border border-slate-800/50 p-6 shadow-2xl card-shadow space-y-6">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-lg font-bold font-display text-white">Configuração</h3>
+            <div className="flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Nexus v9.0-Ultra</span>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="glass rounded-3xl border border-slate-800/50 p-6 shadow-2xl card-shadow space-y-6">
+          
           <div className="space-y-6">
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Tickers de Ativos</label>
@@ -145,51 +118,51 @@ export function TestTab() {
                   placeholder="Ex: PETR4, VALE3, MXRF11"
                 />
               </div>
-              <p className="text-[10px] text-slate-500 mt-2 ml-1">
-                Separe os tickers por vírgula. <span className="text-blue-400/80 italic">Dica: Erros 410/404 geralmente indicam categoria incorreta (ex: testar FII como Ação).</span>
-              </p>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Tipo de Ativo</label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-1.5 bg-slate-950/80 border border-slate-800 rounded-2xl">
-                {['ACAO', 'FII', 'BDR', 'ETF'].map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setType(t as any)}
-                    className={cn(
-                      "py-2.5 rounded-xl text-[10px] font-bold transition-all duration-300",
-                      type === t 
-                        ? "bg-blue-600 text-white shadow-lg shadow-blue-900/20" 
-                        : "text-slate-500 hover:text-slate-300 hover:bg-slate-900"
-                    )}
-                  >
-                    {t === 'ACAO' ? 'Ações' : t === 'FII' ? 'FIIs' : t === 'BDR' ? 'BDRs' : 'ETFs'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="flex items-center gap-3 cursor-pointer group">
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={includeNews}
-                    onChange={(e) => setIncludeNews(e.target.checked)}
-                    className="sr-only"
-                  />
-                  <div className={cn(
-                    "w-10 h-5 rounded-full transition-colors duration-300",
-                    includeNews ? "bg-blue-600" : "bg-slate-800"
-                  )} />
-                  <div className={cn(
-                    "absolute top-1 left-1 w-3 h-3 rounded-full bg-white transition-transform duration-300",
-                    includeNews ? "translate-x-5" : "translate-x-0"
-                  )} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Tipo de Ativo</label>
+                <div className="grid grid-cols-4 gap-2 p-1 bg-slate-950/80 border border-slate-800 rounded-xl">
+                  {['ACAO', 'FII', 'BDR', 'ETF'].map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setType(t as any)}
+                      className={cn(
+                        "py-2 rounded-lg text-[9px] font-bold transition-all",
+                        type === t 
+                          ? "bg-blue-600 text-white shadow-lg shadow-blue-900/20" 
+                          : "text-slate-500 hover:text-slate-300 hover:bg-slate-900"
+                      )}
+                    >
+                      {t}
+                    </button>
+                  ))}
                 </div>
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest group-hover:text-slate-300 transition-colors">Buscar Notícias (Google News)</span>
-              </label>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Opções</label>
+                <label className="flex items-center gap-3 cursor-pointer group p-2 bg-slate-950/80 border border-slate-800 rounded-xl">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={includeNews}
+                      onChange={(e) => setIncludeNews(e.target.checked)}
+                      className="sr-only"
+                    />
+                    <div className={cn(
+                      "w-8 h-4 rounded-full transition-colors duration-300",
+                      includeNews ? "bg-blue-600" : "bg-slate-800"
+                    )} />
+                    <div className={cn(
+                      "absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform duration-300",
+                      includeNews ? "translate-x-4" : "translate-x-0"
+                    )} />
+                  </div>
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest group-hover:text-slate-300 transition-colors">Buscar Notícias</span>
+                </label>
+              </div>
             </div>
 
             <button
@@ -217,7 +190,7 @@ export function TestTab() {
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-white font-bold font-display flex items-center gap-2">
                 <Terminal className="w-4 h-4 text-blue-400" />
-                Console de Saída
+                Console
               </h3>
               <div className="flex items-center gap-3">
                 <button 
@@ -226,7 +199,6 @@ export function TestTab() {
                   className="text-[10px] font-bold text-slate-500 hover:text-blue-400 transition-colors flex items-center gap-1.5 bg-slate-900/50 px-2 py-1 rounded-lg border border-slate-800"
                 >
                   <Copy className="w-3 h-3" />
-                  Copiar
                 </button>
                 <div className="flex gap-1.5">
                   <div className="w-2.5 h-2.5 rounded-full bg-red-500/30" />
@@ -235,7 +207,7 @@ export function TestTab() {
                 </div>
               </div>
             </div>
-            <div className="flex-1 font-mono text-[10px] space-y-2 overflow-y-auto max-h-[250px] scrollbar-hide inner-shadow bg-black/20 p-4 rounded-2xl border border-white/5">
+            <div className="flex-1 font-mono text-[10px] space-y-2 overflow-y-auto max-h-[300px] scrollbar-hide inner-shadow bg-black/20 p-4 rounded-2xl border border-white/5">
               {logs.length === 0 ? (
                 <p className="text-slate-700 italic">Aguardando execução...</p>
               ) : (
@@ -252,7 +224,7 @@ export function TestTab() {
               {loading && (
                 <div className="flex items-center gap-2 text-blue-400 animate-pulse">
                   <span className="opacity-30 shrink-0">{logs.length + 1}</span>
-                  <span>Processando stream de dados...</span>
+                  <span>Processando...</span>
                 </div>
               )}
             </div>

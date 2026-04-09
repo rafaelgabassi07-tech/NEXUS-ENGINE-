@@ -1,6 +1,6 @@
 import express from "express";
-import { runNexusBatch, NexusEngineUltra } from "./lib/nexus-core.js";
-import { runLegacyScraper } from "./lib/legacy-scraper.js";
+import { runNexusBatch, NexusEngineUltra } from "../src/lib/nexus-core.js";
+import { runLegacyScraper } from "../src/lib/legacy-scraper.js";
 import fs from "fs";
 
 const app = express();

@@ -576,24 +576,36 @@ export function BenchmarkTab() {
 
               {results ? (
                 <div className="space-y-6">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800">
-                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Tempo Total</p>
-                      <p className="text-xl font-bold font-mono text-white">{(results.totalTime / 1000).toFixed(2)}s</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800/50 shadow-inner group hover:border-blue-500/30 transition-all">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Clock className="w-3.5 h-3.5 text-blue-400" />
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tempo Total</p>
+                        </div>
+                        <p className="text-2xl font-black font-mono text-white">{(results.totalTime / 1000).toFixed(2)}<span className="text-xs text-slate-500 ml-1">s</span></p>
+                      </div>
+                      <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800/50 shadow-inner group hover:border-emerald-500/30 transition-all">
+                        <div className="flex items-center gap-2 mb-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Sucesso</p>
+                        </div>
+                        <p className={cn("text-2xl font-black font-mono", results.successRate === 100 ? "text-emerald-400" : "text-yellow-400")}>{results.successRate.toFixed(0)}<span className="text-xs text-slate-500 ml-1">%</span></p>
+                      </div>
+                      <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800/50 shadow-inner group hover:border-indigo-500/30 transition-all">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Zap className="w-3.5 h-3.5 text-indigo-400" />
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">P95 Latency</p>
+                        </div>
+                        <p className="text-2xl font-black font-mono text-indigo-400">{results.p95.toFixed(0)}<span className="text-xs text-slate-500 ml-1">ms</span></p>
+                      </div>
+                      <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800/50 shadow-inner group hover:border-purple-500/30 transition-all">
+                        <div className="flex items-center gap-2 mb-2">
+                          <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Throughput</p>
+                        </div>
+                        <p className="text-2xl font-black font-mono text-purple-400">{results.throughput.toFixed(1)}<span className="text-xs text-slate-500 ml-1">/s</span></p>
+                      </div>
                     </div>
-                    <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800">
-                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Sucesso</p>
-                      <p className={cn("text-xl font-bold font-mono", results.successRate === 100 ? "text-emerald-400" : "text-yellow-400")}>{results.successRate.toFixed(0)}%</p>
-                    </div>
-                    <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800">
-                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">P95 Latency</p>
-                      <p className="text-xl font-bold font-mono text-blue-400">{results.p95.toFixed(0)}ms</p>
-                    </div>
-                    <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800">
-                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Throughput</p>
-                      <p className="text-xl font-bold font-mono text-indigo-400">{results.throughput.toFixed(1)}/s</p>
-                    </div>
-                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="md:col-span-2 p-5 bg-slate-900/50 rounded-2xl border border-slate-800 h-[240px]">
@@ -774,91 +786,91 @@ export function BenchmarkTab() {
                       </div>
                     </div>
 
-                    <div className="glass-dark border border-white/5 rounded-2xl overflow-hidden">
-                      <div className="overflow-x-auto scrollbar-hide">
-                        <table className="w-full text-left border-collapse min-w-[600px]">
-                          <thead>
-                            <tr className="bg-slate-800/30 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                              <th className="px-4 py-3">Arquitetura</th>
-                              <th className="px-4 py-3">Tempo (s)</th>
-                              <th className="px-4 py-3">Sucesso</th>
-                              <th className="px-4 py-3">Custo/1M</th>
-                              <th className="px-4 py-3">Eficiência</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-white/5">
-                            {[
-                              raceResults.nexus,
-                              raceResults.legacy,
-                              raceResults.rust,
-                              raceResults.go,
-                              raceResults.scrapy,
-                              raceResults.puppeteer,
-                              ...(raceResults.endpoint ? [raceResults.endpoint] : []),
-                              ...(raceResults.custom ? [raceResults.custom] : [])
-                            ].sort((a, b) => a.time - b.time).map((item, idx) => {
-                              const isNexus = item.name === 'Nexus Engine';
-                              const bestTime = Math.min(...[raceResults.nexus, raceResults.legacy, raceResults.rust, raceResults.go, raceResults.scrapy, raceResults.puppeteer].map(i => i.time));
-                              const efficiency = (bestTime / item.time) * 100;
-
-                              return (
-                                <tr key={idx} className={cn(
-                                  "group transition-colors",
-                                  isNexus ? "bg-blue-600/5 hover:bg-blue-600/10" : "hover:bg-white/5"
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                      {[
+                        raceResults.nexus,
+                        raceResults.legacy,
+                        raceResults.rust,
+                        raceResults.go,
+                        raceResults.scrapy,
+                        raceResults.puppeteer,
+                        ...(raceResults.endpoint ? [raceResults.endpoint] : []),
+                        ...(raceResults.custom ? [raceResults.custom] : [])
+                      ].sort((a, b) => a.time - b.time).map((item, idx) => {
+                        const isNexus = item.name === 'Nexus Engine';
+                        const isWinner = idx === 0;
+                        
+                        return (
+                          <motion.div 
+                            key={item.name}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.05 }}
+                            className={cn(
+                              "relative p-4 rounded-2xl border transition-all group",
+                              isNexus 
+                                ? "bg-blue-600/10 border-blue-500/30 shadow-lg shadow-blue-500/5 ring-1 ring-blue-500/20" 
+                                : "bg-slate-900/40 border-slate-800/50 hover:border-slate-700"
+                            )}
+                          >
+                            {isWinner && (
+                              <div className="absolute -top-2 -right-2 bg-amber-500 text-black text-[8px] font-black px-2 py-0.5 rounded-full shadow-lg flex items-center gap-1 z-10">
+                                <Zap className="w-2.5 h-2.5 fill-black" /> VENCEDOR
+                              </div>
+                            )}
+                            
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <div className={cn(
+                                  "w-8 h-8 rounded-lg flex items-center justify-center",
+                                  isNexus ? "bg-blue-500/20 text-blue-400" : "bg-slate-800 text-slate-500"
                                 )}>
-                                  <td className="px-4 py-3">
-                                    <div className="flex items-center gap-3">
-                                      <div className={cn(
-                                        "w-6 h-6 rounded flex items-center justify-center shrink-0",
-                                        isNexus ? "bg-blue-500 text-white" : "bg-slate-800 text-slate-500"
-                                      )}>
-                                        {isNexus ? <Zap className="w-3 h-3" /> : <Layers className="w-3 h-3" />}
-                                      </div>
-                                      <div>
-                                        <p className={cn("text-xs font-bold", isNexus ? "text-blue-400" : "text-white")}>{item.name}</p>
-                                        <p className="text-[9px] text-slate-500 font-mono uppercase">{item.arch}</p>
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <div className="space-y-1">
-                                      <p className={cn("text-xs font-mono font-bold", isNexus ? "text-blue-400" : "text-slate-300")}>
-                                        {(item.time / 1000).toFixed(2)}s
-                                      </p>
-                                      <div className="w-24 bg-slate-800 rounded-full h-1 overflow-hidden">
-                                        <div 
-                                          className={cn("h-full rounded-full", isNexus ? "bg-blue-500" : "bg-slate-600")} 
-                                          style={{ width: `${Math.min(100, (bestTime / item.time) * 100)}%` }} 
-                                        />
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <span className={cn(
-                                      "text-[10px] font-bold px-2 py-0.5 rounded-full",
-                                      item.successRate >= 90 ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
-                                    )}>
-                                      {item.successRate.toFixed(0)}%
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-3 text-xs font-mono text-slate-400">
-                                    ${item.cost.toFixed(2)}
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <div className="flex items-center gap-1.5">
-                                      <div className={cn(
-                                        "w-1.5 h-1.5 rounded-full",
-                                        efficiency > 80 ? "bg-emerald-500" : efficiency > 40 ? "bg-yellow-500" : "bg-red-500"
-                                      )} />
-                                      <span className="text-[10px] font-bold text-slate-500">{efficiency.toFixed(0)}%</span>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                                  {isNexus ? <Zap className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
+                                </div>
+                                <div>
+                                  <h5 className="text-xs font-bold text-white truncate max-w-[100px]">{item.name}</h5>
+                                  <p className="text-[9px] text-slate-500 font-medium uppercase tracking-tighter">{item.arch}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className={cn(
+                                  "text-sm font-black font-mono",
+                                  isWinner ? "text-emerald-400" : "text-slate-300"
+                                )}>
+                                  {(item.time / 1000).toFixed(2)}s
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[9px] text-slate-500">Sucesso</span>
+                                <span className={cn(
+                                  "text-[10px] font-bold",
+                                  item.successRate > 90 ? "text-emerald-400" : (item.successRate > 70 ? "text-yellow-400" : "text-red-400")
+                                )}>{item.successRate.toFixed(0)}%</span>
+                              </div>
+                              <div className="w-full bg-slate-800/50 rounded-full h-1">
+                                <div 
+                                  className={cn("h-1 rounded-full", item.successRate > 90 ? "bg-emerald-500" : (item.successRate > 70 ? "bg-yellow-500" : "bg-red-500"))} 
+                                  style={{ width: `${item.successRate}%` }} 
+                                />
+                              </div>
+                            </div>
+
+                            <div className="mt-3 pt-3 border-t border-white/5 grid grid-cols-2 gap-2">
+                              <div>
+                                <p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest">Custo/1M</p>
+                                <p className="text-[10px] font-bold text-slate-300">${item.cost.toFixed(2)}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[8px] text-slate-500 uppercase font-bold tracking-widest">Infra</p>
+                                <p className="text-[10px] font-bold text-slate-300 truncate">{item.infra}</p>
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
                     </div>
                   </div>
 
