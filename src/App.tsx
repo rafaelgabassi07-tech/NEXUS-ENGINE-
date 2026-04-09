@@ -7,6 +7,19 @@ import HomePage from './pages/HomePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { FAQPage } from './pages/FAQPage';
 
+/**
+ * Component that resets scroll to top on every route change.
+ */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
+
 function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
@@ -117,8 +130,19 @@ function Header() {
 }
 
 export default function App() {
+  useEffect(() => {
+    // Force scroll to top on initial load
+    window.scrollTo(0, 0);
+    
+    // Disable browser's automatic scroll restoration to prevent jumping
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+  }, []);
+
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500 selection:text-white overflow-x-hidden">
         <Header />
         <Routes>

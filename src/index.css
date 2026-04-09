@@ -20,7 +20,7 @@
 
 @layer base {
   html {
-    scroll-behavior: smooth;
+    /* scroll-behavior: smooth; - Removed to prevent unwanted rolling on load */
   }
   body {
     @apply bg-slate-950 text-slate-200 antialiased selection:bg-blue-500 selection:text-white;

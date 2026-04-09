@@ -1,7 +1,22 @@
 export type AssetType = 'ACAO' | 'FII';
 export type ExtendedAssetType = AssetType | 'BDR' | 'ETF';
-export type CacheStatus = 'HIT' | 'MISS' | 'DEDUPE' | 'ERROR';
+export type CacheStatus = 'HIT' | 'MISS' | 'DEDUPE' | 'ERROR' | 'STALE';
 export type DataSource = string;
+
+export type DataType = 'number' | 'text' | 'date' | 'any';
+
+export interface LabelRule {
+  name: string;
+  type?: DataType;
+  regex?: RegExp;
+  paths?: string[]; // Seletores de caminho SAX (ex: "div.card > span.value")
+}
+
+export interface CustomTemplate {
+  rules: LabelRule[];
+  aliases?: Record<string, string>;
+  htmlClasses?: string[];
+}
 
 export interface NewsItem {
   title: string;
@@ -20,6 +35,10 @@ export type ResultMap = Partial<Record<AssetLabel, string | number>>;
 export interface NexusEngineConfig {
   /** TTL do cache principal em ms (padrão: 5 min) */
   cacheTtlMs?: number;
+  /** TTL para dados obsoletos que ainda podem ser servidos enquanto revalida (padrão: 3 min) */
+  cacheStaleMs?: number;
+  /** Tempo máximo absoluto que um dado pode ficar no cache (padrão: 24h) */
+  cacheMaxMs?: number;
   /** Máximo de entradas no cache LRU (padrão: 200) */
   cacheMaxSize?: number;
   /** TTL do cache de busca de tickers em ms (padrão: 60s) */

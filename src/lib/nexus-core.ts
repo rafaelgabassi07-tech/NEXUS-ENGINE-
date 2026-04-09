@@ -1,16 +1,3 @@
-/**
- * nexus-engine.ts — NexusEngineUltra v3.0 (Enterprise Vercel Edition)
- *
- * MELHORIAS IMPLEMENTADAS vs v2:
- * [ARQUITETURA]
- * #1 Fase 1.5 integrada: Mesclagem inteligente entre Investidor10 e Status Invest.
- * #2 Seletores Dinâmicos: Classes CSS isoladas nos Presets.
- * #3 Radar Heurístico: Extração por proximidade visual, sobrevive a mudanças extremas de layout CSS.
- * #4 Normalizador Avançado: Conversão matemática de grandezas (K, M, B) para dados consistentes.
- * #5 Evasão Cloudflare: Rotação de Accept-Language e headers DNT invisíveis.
- * #6 Telemetria: Alertas via Discord/Webhook quando o Circuit Breaker abre.
- */
-
 import { Parser } from 'htmlparser2';
 import { performance } from 'perf_hooks';
 import yahooFinance from 'yahoo-finance2';
@@ -19,6 +6,7 @@ import {
   AssetType,
   ExtendedAssetType,
   AssetLabel,
+  CacheStatus,
   ResultMap,
   FetchSuccess,
   FetchAtivoResult,
@@ -29,20 +17,19 @@ import {
   Dividend,
   DataSource,
   NewsItem,
-  NexusEngineConfig
+  NexusEngineConfig,
+  DataType,
+  LabelRule,
+  CustomTemplate
 } from './nexus/types.js';
 
 import { delay, getRandomAgent } from './nexus/utils.js';
 
-// ═══════════════════════════════════════════════════════════
-// TIPOS INTERNOS & INTERFACES ATUALIZADAS
-// ═══════════════════════════════════════════════════════════
-
-type ScraperSource = 'investidor10' | 'statusInvest';
+type ScraperSource = 'investidor10' | 'statusInvest' | 'custom';
 
 interface ExtendedAssetPreset extends AssetPreset {
   url_base: string;
-  labels: AssetLabel[];
+  labels: AssetLabel[]; 
   statusInvest_base?: string;
   aliases?: Record<string, AssetLabel>;
   htmlClasses: Record<ScraperSource, string[]>;
@@ -60,15 +47,9 @@ interface YahooQuote {
 interface CacheEntry { data: FetchAtivoResult; timestamp: number; }
 
 const VALORES_INVALIDOS = new Set(['-', '—', '–', 'N/A', 'n/a', 'nd', '', 'null', 'undefined', '--', '---', '--%', '0%']);
-// ═══════════════════════════════════════════════════════════
-// UTILITÁRIOS INTERNOS AVANÇADOS
-// ═══════════════════════════════════════════════════════════
-
-/** Normalizador Inteligente (Converte R$, %, M, B, K) */
 function normalizeBRNumber(raw: string): number | string {
   if (!raw) return '';
   let limpo = raw.replace(/[R$\s]/g, '').toUpperCase().trim();
-  
   if (limpo.includes('%')) return limpo;
 
   let multiplicador = 1;
@@ -103,7 +84,6 @@ function periodoParaData(periodo: ChartPeriod): Date {
 
 function extrairVersaoChrome(ua: string): string { return ua.match(/Chrome\/(\d+)/)?.[1] ?? '124'; }
 
-/** Evasão Cloudflare aprimorada para Serverless */
 function getHeadersConsistentes(userAgent: string): Record<string, string> {
   const v = extrairVersaoChrome(userAgent);
   const lang = Math.random() > 0.5 ? 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7' : 'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3';
@@ -135,10 +115,6 @@ function validarResultMap(results: ResultMap): ResultMap {
   }
   return validado;
 }
-// ═══════════════════════════════════════════════════════════
-// LRU CACHE & CIRCUIT BREAKER C/ TELEMETRIA
-// ═══════════════════════════════════════════════════════════
-
 class LRUCache<K, V> {
   private readonly mapa = new Map<K, V>();
   constructor(private readonly tamanhoMax: number) {}
@@ -183,87 +159,53 @@ class CircuitBreaker {
     e.ultimaFalha = Date.now();
     if (e.falhas >= this.limiar && e.estado !== 'ABERTO') {
       e.estado = 'ABERTO';
-      this.dispararAlertaDiscord(`🚨 **Nexus Engine Alerta:** Circuit Breaker ABERTO para a fonte \`${chave}\` devido a falhas contínuas (WAF Bloqueio ou Layout quebrado).`);
     }
     this.entradas.set(chave, e);
   }
-
   getEstado(chave: string): EstadoCB { return this.entradas.get(chave)?.estado ?? 'FECHADO'; }
-
-  private dispararAlertaDiscord(mensagem: string) {
-    const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
-    if (!webhookUrl) return;
-    fetch(webhookUrl, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: mensagem })
-    }).catch(() => {});
-  }
 }
-// ═══════════════════════════════════════════════════════════
-// INICIALIZAÇÃO DO YAHOO FINANCE
-// ═══════════════════════════════════════════════════════════
+
 const yf = resolveYahooFinance(yahooFinance);
 try { if (typeof yf?.setGlobalConfig === 'function') yf.setGlobalConfig({ suppressNotices: ['yahooSurvey'] }); } 
 catch (e) { console.warn('[NexusEngine] Falha ao configurar YF:', e); }
-
-// ═══════════════════════════════════════════════════════════
-// PRESETS DE ATIVOS (SELETORES DINÂMICOS)
-// ═══════════════════════════════════════════════════════════
-
 const NEXUS_PRESETS: Record<ExtendedAssetType, ExtendedAssetPreset> = {
   ACAO: {
     url_base: 'https://investidor10.com.br/acoes',
     statusInvest_base: 'https://statusinvest.com.br/acoes',
-    labels: [
-      'P/L', 'Dividend Yield', 'P/VP', 'VPA', 'ROE', 'ROIC', 'Margem Líquida', 'Margem Bruta', 
-      'Margem EBIT', 'EV/EBITDA', 'Dívida Líquida / Patrimônio', 'CAGR Receitas 5 Anos', 'LPA', 
-      'PEG Ratio', 'P/EBIT', 'P/Ativo', 'PSR', 'Giro Ativos', 'Dívida Bruta / Patrimônio',
-      'Preço Atual', 'Variação (24h)', 'Setor', 'Subsetor', 'Segmento'
-    ],
-    aliases: {
-      'dy': 'Dividend Yield', 'p/l': 'P/L', 'p/vp': 'P/VP', 'vpa': 'VPA', 'lpa': 'LPA', 'roe': 'ROE',
-      'roic': 'ROIC', 'psr': 'PSR', 'p/ativo': 'P/Ativo', 'cotação': 'Preço Atual', 'cotacao': 'Preço Atual',
-      'variação': 'Variação (24h)', 'variacao': 'Variação (24h)', 'setor de atuação': 'Setor', 
-      'subsetor de atuação': 'Subsetor', 'segmento de atuação': 'Segmento', 'segmento': 'Segmento'
-    },
-    htmlClasses: { investidor10: ['value', 'v-value', '_card-body'], statusInvest: ['value', 'v-align-middle', 'info', 'd-block'] }
+    labels: ['P/L', 'Dividend Yield', 'P/VP', 'VPA', 'ROE', 'ROIC', 'Margem Líquida', 'Margem Bruta', 'Margem EBIT', 'EV/EBITDA', 'Dívida Líquida / Patrimônio', 'CAGR Receitas 5 Anos', 'LPA', 'PEG Ratio', 'P/EBIT', 'P/Ativo', 'PSR', 'Giro Ativos', 'Dívida Bruta / Patrimônio', 'Preço Atual', 'Variação (24h)', 'Setor', 'Subsetor', 'Segmento'],
+    aliases: { 'dy': 'Dividend Yield', 'p/l': 'P/L', 'p/vp': 'P/VP', 'vpa': 'VPA', 'lpa': 'LPA', 'roe': 'ROE', 'roic': 'ROIC', 'psr': 'PSR', 'p/ativo': 'P/Ativo', 'cotação': 'Preço Atual', 'cotacao': 'Preço Atual', 'variação': 'Variação (24h)', 'variacao': 'Variação (24h)', 'setor de atuação': 'Setor', 'subsetor de atuação': 'Subsetor', 'segmento de atuação': 'Segmento', 'segmento': 'Segmento' },
+    htmlClasses: { investidor10: ['value', 'v-value', '_card-body'], statusInvest: ['value', 'v-align-middle', 'info', 'd-block'], custom: [] }
   },
   FII: {
     url_base: 'https://investidor10.com.br/fiis',
     statusInvest_base: 'https://statusinvest.com.br/fundos-imobiliarios',
-    labels: [
-      'Dividend Yield', 'P/VP', 'Valor Patrimonial', 'Liquidez Diária', 'Último Rendimento', 
-      'Vacância Física', 'Vacância Financeira', 'Quantidade Ativos', 'Patrimônio Líquido', 
-      'Valor de Mercado', 'P/Ativo', 'Preço Atual', 'Variação (24h)', 'Segmento'
-    ],
+    labels: ['Dividend Yield', 'P/VP', 'Valor Patrimonial', 'Liquidez Diária', 'Último Rendimento', 'Vacância Física', 'Vacância Financeira', 'Quantidade Ativos', 'Patrimônio Líquido', 'Valor de Mercado', 'P/Ativo', 'Preço Atual', 'Variação (24h)', 'Segmento'],
     aliases: { 'dy': 'Dividend Yield', 'p/vp': 'P/VP', 'p/ativo': 'P/Ativo', 'último rendimento': 'Último Rendimento', 'cotação': 'Preço Atual', 'cotacao': 'Preço Atual', 'variação': 'Variação (24h)', 'variacao': 'Variação (24h)', 'segmento': 'Segmento' },
-    htmlClasses: { investidor10: ['value', 'v-value', '_card-body'], statusInvest: ['value', 'v-align-middle'] }
+    htmlClasses: { investidor10: ['value', 'v-value', '_card-body'], statusInvest: ['value', 'v-align-middle'], custom: [] }
   },
   BDR: {
     url_base: 'https://investidor10.com.br/bdrs',
     statusInvest_base: 'https://statusinvest.com.br/bdrs',
     labels: ['P/L', 'Dividend Yield', 'P/VP', 'VPA', 'ROE', 'ROIC', 'Margem Líquida', 'Margem Bruta', 'EV/EBITDA', 'LPA', 'Preço Atual', 'Variação (24h)', 'Setor', 'Segmento'],
     aliases: { 'dy': 'Dividend Yield', 'p/l': 'P/L', 'p/vp': 'P/VP', 'lpa': 'LPA', 'roe': 'ROE', 'cotação': 'Preço Atual', 'cotacao': 'Preço Atual', 'variação': 'Variação (24h)', 'variacao': 'Variação (24h)' },
-    htmlClasses: { investidor10: ['value', 'v-value', '_card-body'], statusInvest: ['value', 'v-align-middle'] }
+    htmlClasses: { investidor10: ['value', 'v-value', '_card-body'], statusInvest: ['value', 'v-align-middle'], custom: [] }
   },
   ETF: {
     url_base: 'https://investidor10.com.br/etfs',
     statusInvest_base: 'https://statusinvest.com.br/etfs',
     labels: ['Dividend Yield', 'P/VP', 'Valor Patrimonial', 'Liquidez Diária', 'Patrimônio Líquido', 'Valor de Mercado', 'Taxa de Administração', 'Preço Atual', 'Variação (24h)'],
     aliases: { 'dy': 'Dividend Yield', 'taxa adm': 'Taxa de Administração', 'taxa de administração': 'Taxa de Administração', 'cotação': 'Preço Atual', 'cotacao': 'Preço Atual', 'variação': 'Variação (24h)', 'variacao': 'Variação (24h)' },
-    htmlClasses: { investidor10: ['value', 'v-value', '_card-body'], statusInvest: ['value', 'v-align-middle'] }
+    htmlClasses: { investidor10: ['value', 'v-value', '_card-body'], statusInvest: ['value', 'v-align-middle'], custom: [] }
   },
 };
-
-// ═══════════════════════════════════════════════════════════
-// ENGINE PRINCIPAL
-// ═══════════════════════════════════════════════════════════
-
 export type { AssetType, FetchAtivoResult };
 
 export class NexusEngineUltra {
   private static _config: Required<NexusEngineConfig> = {
-    cacheTtlMs: 5 * 60 * 1_000, cacheMaxSize: 200, searchCacheTtlMs: 60 * 1_000,
+    cacheTtlMs: 5 * 60 * 1_000,
+    cacheStaleMs: 3 * 60 * 1_000,
+    cacheMaxMs: 24 * 60 * 60 * 1_000,
+    cacheMaxSize: 200, searchCacheTtlMs: 60 * 1_000,
     watchdogMs: 4_000, maxRetries: 2, concurrencyLimit: 5, proxy: '',
     circuitBreakerThreshold: 3, circuitBreakerResetMs: 30_000,
   };
@@ -271,6 +213,7 @@ export class NexusEngineUltra {
   private static _cache = new LRUCache<string, CacheEntry>(200);
   private static _searchCache = new LRUCache<string, { data: any[]; timestamp: number }>(50);
   private static _cb = new CircuitBreaker(3, 30_000);
+  private static _inFlight = new Map<string, Promise<FetchAtivoResult>>();
 
   static get defaultConcurrencyLimit(): number { return this._config.concurrencyLimit; }
 
@@ -282,24 +225,63 @@ export class NexusEngineUltra {
     }
   }
 
+  static async fetchCustom(url: string, template: CustomTemplate): Promise<FetchSuccess> {
+    const logs: string[] = [];
+    const log = (m: string) => logs.push(`[Custom] ${m}`);
+    const globalStart = performance.now();
+    
+    const customConfig: CustomTemplate = {
+      rules: template.rules,
+      aliases: template.aliases || {},
+      htmlClasses: template.htmlClasses || []
+    };
+
+    return await this._executeFetch(url, customConfig, 'custom', globalStart, log);
+  }
+
   static async fetchAtivo(ticker: string, type: ExtendedAssetType = 'ACAO', isRetry = false, includeNews = false): Promise<FetchAtivoResult> {
     const cleanTicker = ticker.trim().replace(/\.SA$/i, '').toUpperCase();
     const cacheKey = `${cleanTicker}:${type}`;
-    const logs: string[] = [];
-    const log = (m: string) => logs.push(`[${cleanTicker}] ${m}`);
 
     if (!isRetry) {
       const cached = this._cache.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < this._config.cacheTtlMs) {
-        let data = { ...cached.data };
-        if (includeNews && data.cacheStatus !== 'ERROR' && !('error' in data) && !(data as any).news) {
-          (data as any).news = await this.fetchNews(cleanTicker);
+      if (cached) {
+        const ageMs = Date.now() - cached.timestamp;
+        if (ageMs < this._config.cacheStaleMs) {
+          return this._hydrateData(cached.data, includeNews, cleanTicker, 'HIT');
+        } else if (ageMs < this._config.cacheMaxMs) {
+          if (!this._inFlight.has(cacheKey)) {
+            const backgroundFetch = this._doFetchCore(cleanTicker, type, includeNews, cacheKey).catch(() => {});
+            this._inFlight.set(cacheKey, backgroundFetch as Promise<FetchAtivoResult>);
+            backgroundFetch.finally(() => this._inFlight.delete(cacheKey));
+          }
+          return this._hydrateData(cached.data, includeNews, cleanTicker, 'STALE');
         }
-        return { ...data, cacheStatus: 'HIT', logs };
       }
     }
 
+    if (!isRetry && this._inFlight.has(cacheKey)) return this._inFlight.get(cacheKey)!;
+
+    const fetchPromise = this._doFetchCore(cleanTicker, type, includeNews, cacheKey, isRetry);
+    if (!isRetry) {
+      this._inFlight.set(cacheKey, fetchPromise);
+      fetchPromise.finally(() => this._inFlight.delete(cacheKey));
+    }
+    return fetchPromise;
+  }
+
+  private static async _hydrateData(data: FetchAtivoResult, includeNews: boolean, ticker: string, status: CacheStatus): Promise<FetchAtivoResult> {
+    let finalData = { ...data, cacheStatus: status };
+    if (includeNews && finalData.cacheStatus !== 'ERROR' && !('error' in finalData) && !(finalData as any).news) {
+      (finalData as any).news = await this.fetchNews(ticker);
+    }
+    return finalData;
+  }
+  private static async _doFetchCore(cleanTicker: string, type: ExtendedAssetType, includeNews: boolean, cacheKey: string, isRetry = false): Promise<FetchAtivoResult> {
+    const logs: string[] = [];
+    const log = (m: string) => logs.push(`[${cleanTicker}] ${m}`);
     const preset = NEXUS_PRESETS[type];
+    
     if (!preset) return { ticker: cleanTicker, error: `Tipo inválido.`, cacheStatus: 'ERROR', logs };
 
     const url = `${preset.url_base}/${cleanTicker.toLowerCase()}/`;
@@ -322,7 +304,7 @@ export class NexusEngineUltra {
       return { ticker: cleanTicker, error: err.message, cacheStatus: 'ERROR', logs };
     }
   }
- // ── ORQUESTRAÇÃO MULTICANAL ────────────────────────────────
+
   private static async _executeFetchWithFallback(
     ticker: string, url: string, preset: ExtendedAssetPreset, type: ExtendedAssetType, log: (m: string) => void
   ): Promise<FetchSuccess> {
@@ -330,26 +312,30 @@ export class NexusEngineUltra {
     let finalResults: ResultMap = {};
     const sourcesUsed: Set<string> = new Set();
     let bytesTotal = 0;
-    const { labels } = preset;
+    
+    const customTemplate: CustomTemplate = {
+      rules: preset.labels.map(l => ({ name: l, type: 'number' })),
+      aliases: preset.aliases,
+      htmlClasses: preset.htmlClasses['investidor10']
+    };
 
-    // FASE 1: Investidor10
     const cbI10 = `investidor10:${ticker}`;
     if (!this._cb.estaAberto(cbI10)) {
       try {
-        const r1 = await this._executeFetchWithRetry(url, preset, 'investidor10', this._config.maxRetries, startTime, log);
+        const r1 = await this._executeFetchWithRetry(url, customTemplate, 'investidor10', this._config.maxRetries, startTime, log);
         finalResults = { ...r1.results };
         bytesTotal += r1.metrics.bytesProcessed;
         if (Object.keys(finalResults).length > 0) { sourcesUsed.add('Investidor10'); this._cb.registrarSucesso(cbI10); }
       } catch (e) { log(`Fase 1 falhou: ${(e as Error).message}`); this._cb.registrarFalha(cbI10); }
     }
 
-    // FASE 1.5: Status Invest (Mesclagem)
-    if (Object.keys(finalResults).length < labels.length && preset.statusInvest_base) {
+    if (Object.keys(finalResults).length < preset.labels.length && preset.statusInvest_base) {
       const cbSI = `statusInvest:${ticker}`;
       if (!this._cb.estaAberto(cbSI)) {
         const urlSI = `${preset.statusInvest_base}/${ticker.toLowerCase()}/`;
+        customTemplate.htmlClasses = preset.htmlClasses['statusInvest'];
         try {
-          const r15 = await this._executeFetchWithRetry(urlSI, preset, 'statusInvest', 1, startTime, log);
+          const r15 = await this._executeFetchWithRetry(urlSI, customTemplate, 'statusInvest', 1, startTime, log);
           bytesTotal += r15.metrics.bytesProcessed;
           let added = 0;
           for (const [k, v] of Object.entries(r15.results)) {
@@ -360,7 +346,6 @@ export class NexusEngineUltra {
       }
     }
 
-    // FASE 2: Yahoo Finance
     const cbYF = `yahoo:${ticker}`;
     if (!this._cb.estaAberto(cbYF)) {
       try {
@@ -398,18 +383,18 @@ export class NexusEngineUltra {
       results: validatedResults,
       metrics: {
         totalTimeMs: performance.now() - startTime, bytesProcessed: bytesTotal,
-        foundKeys, earlyAbort: foundKeys.length >= labels.length,
-        successRate: foundKeys.length / labels.length,
+        foundKeys, earlyAbort: foundKeys.length >= preset.labels.length,
+        successRate: foundKeys.length / preset.labels.length,
         source: Array.from(sourcesUsed).join(' + ') as DataSource,
       },
     };
   }
 
   private static async _executeFetchWithRetry(
-    url: string, preset: ExtendedAssetPreset, source: ScraperSource, retries: number, globalStart: number, log: (m: string) => void
+    url: string, template: CustomTemplate, source: ScraperSource, retries: number, globalStart: number, log: (m: string) => void
   ): Promise<FetchSuccess> {
     for (let i = 0; i < retries; i++) {
-      try { return await this._executeFetch(url, preset, source, globalStart, log); } 
+      try { return await this._executeFetch(url, template, source, globalStart, log); } 
       catch (err) {
         const msg = (err as Error).message;
         if (i === retries - 1 || msg.includes('404') || msg.includes('410') || msg.includes('451')) throw err;
@@ -418,17 +403,16 @@ export class NexusEngineUltra {
     }
     throw new Error('Retries esgotados');
   }
-
-  // ── CORE SCRAPER (COM RADAR HEURÍSTICO) ────────────────────
   private static async _executeFetch(
-    url: string, preset: ExtendedAssetPreset, source: ScraperSource, globalStart: number, log: (m: string) => void
+    url: string, template: CustomTemplate, source: ScraperSource, globalStart: number, log: (m: string) => void
   ): Promise<FetchSuccess> {
-    const { labels, aliases = {}, htmlClasses } = preset;
-    const labelMap: Record<string, AssetLabel> = {};
-    labels.forEach(l => labelMap[l.toLowerCase()] = l);
-    Object.entries(aliases).forEach(([alias, label]) => labelMap[alias.toLowerCase()] = label);
-    const allLabels = new Set(Object.keys(labelMap));
-    const allowedClasses = htmlClasses[source] || [];
+    const { rules, aliases = {}, htmlClasses = [] } = template;
+    
+    const ruleMap: Record<string, LabelRule> = {};
+    rules.forEach(r => ruleMap[r.name.toLowerCase()] = r);
+    Object.entries(aliases).forEach(([alias, label]) => {
+        if(ruleMap[label.toLowerCase()]) ruleMap[alias.toLowerCase()] = ruleMap[label.toLowerCase()];
+    });
     
     const abortCtrl = new AbortController();
     let watchdogId: NodeJS.Timeout;
@@ -437,14 +421,16 @@ export class NexusEngineUltra {
 
     const results: ResultMap = {};
     let foundCount = 0; let bytesProcessed = 0;
-    let lastLabel: AssetLabel | '' = '';
+    
+    let lastRule: LabelRule | null = null;
     let depth = 0; let buffer = '';
     const ignoreTags = new Set(['script', 'style', 'option', 'title', 'meta', 'footer', 'nav', 'header', 'noscript', 'iframe']);
     let ignoreDepth = 0;
 
-    // Radar Heurístico
-    let radarAguardando: AssetLabel | null = null;
+    let radarAguardando: LabelRule | null = null;
     let passosPosRadar = 0;
+
+    const pathStack: string[] = [];
 
     const parser = new Parser({
       onopentag(name, attr) {
@@ -453,61 +439,101 @@ export class NexusEngineUltra {
         
         if (radarAguardando) passosPosRadar++;
 
-        let labelEncontrado: AssetLabel | '' = '';
+        const classStr = attr.class ? '.' + attr.class.split(/\s+/).join('.') : '';
+        const nodeSignature = `${name}${classStr}`;
+        pathStack.push(nodeSignature);
+        const currentPath = pathStack.join(' > ');
+
+        for (const rule of rules) {
+          if (rule.paths) {
+            for (const path of rule.paths) {
+              if (currentPath.endsWith(path)) {
+                radarAguardando = rule;
+                passosPosRadar = 0;
+              }
+            }
+          }
+        }
+
+        let ruleEncontrada: LabelRule | null = null;
         for (const attrName of ['title', 'aria-label', 'data-title', 'data-label']) {
           const raw = attr[attrName]; if (!raw) continue;
           const lower = raw.trim().toLowerCase();
-          if (allLabels.has(lower)) { labelEncontrado = labelMap[lower]; break; }
+          if (ruleMap[lower]) { ruleEncontrada = ruleMap[lower]; break; }
         }
-        if (labelEncontrado) lastLabel = labelEncontrado;
+        if (ruleEncontrada) lastRule = ruleEncontrada;
 
-        // Seletores dinâmicos baseados no Preset
-        const ehBlocoValor = attr.class?.split(/\s+/).some(c => allowedClasses.includes(c));
+        const ehBlocoValor = htmlClasses.length > 0 && attr.class?.split(/\s+/).some(c => htmlClasses.includes(c));
         if (ehBlocoValor) {
-          if (depth === 0) { buffer = ''; if (!labelEncontrado) lastLabel = ''; }
+          if (depth === 0) { buffer = ''; if (!ruleEncontrada) lastRule = null; }
           depth++;
         } else if (depth > 0) depth++;
       },
       ontext(t) {
         if (ignoreDepth > 0) return;
         
-        // Atuação do Radar Heurístico
         const txt = t.trim();
-        if (radarAguardando && txt && /^[\d,.-]+[%MkB]?$/.test(txt)) {
-          const norm = normalizeBRNumber(txt);
-          if (norm && !VALORES_INVALIDOS.has(String(norm))) {
-            results[radarAguardando] = norm; foundCount++;
+        
+        if (radarAguardando && txt) {
+          let extraido: string | number | null = null;
+          const ruleType = radarAguardando.type || 'number';
+          
+          if (radarAguardando.regex && radarAguardando.regex.test(txt)) {
+            extraido = txt;
+          } else if (ruleType === 'text' || ruleType === 'any' || ruleType === 'date') {
+            extraido = txt;
+          } else if (ruleType === 'number' && /^[\d,.-]+[%MkB]?$/.test(txt)) {
+            const norm = normalizeBRNumber(txt);
+            if (norm && !VALORES_INVALIDOS.has(String(norm))) extraido = norm;
+          }
+
+          if (extraido !== null) {
+            results[radarAguardando.name] = extraido; foundCount++;
             radarAguardando = null; passosPosRadar = 0;
           }
         }
+
         if (depth > 0) { if (buffer.length < 512) buffer += t; return; }
         
         if (!txt || txt.length > 60) return;
         const lower = txt.replace(':', '').toLowerCase();
-        if (allLabels.has(lower)) {
-          const lbl = labelMap[lower];
-          lastLabel = lbl;
-          radarAguardando = lbl; // Ativa radar heurístico para pegar próximo número solto
+        
+        if (ruleMap[lower]) {
+          lastRule = ruleMap[lower];
+          radarAguardando = lastRule; 
           passosPosRadar = 0;
         }
       },
       onclosetag(name) {
         if (ignoreTags.has(name)) { if (ignoreDepth > 0) ignoreDepth--; return; }
         if (ignoreDepth > 0) return;
-        if (radarAguardando && passosPosRadar > 8) radarAguardando = null; // Timeout do radar
+        
+        pathStack.pop();
+
+        if (radarAguardando && passosPosRadar > 8) radarAguardando = null; 
 
         if (depth > 0) {
           depth--;
           if (depth === 0) {
-            if (lastLabel) {
+            if (lastRule) {
               const trimmed = buffer.trim();
-              const normalized = trimmed ? normalizeBRNumber(trimmed) : '';
-              if (normalized && !VALORES_INVALIDOS.has(String(normalized))) {
-                results[lastLabel] = normalized; foundCount++;
-                if (foundCount >= labels.length) abortCtrl.abort();
+              
+              let extraido: string | number | null = null;
+              const ruleType = lastRule.type || 'number';
+
+              if (lastRule.regex && lastRule.regex.test(trimmed)) extraido = trimmed;
+              else if (ruleType === 'text' || ruleType === 'any' || ruleType === 'date') extraido = trimmed;
+              else {
+                const normalized = trimmed ? normalizeBRNumber(trimmed) : '';
+                if (normalized && !VALORES_INVALIDOS.has(String(normalized))) extraido = normalized;
+              }
+
+              if (extraido !== null) {
+                results[lastRule.name] = extraido; foundCount++;
+                if (foundCount >= rules.length) abortCtrl.abort();
               }
             }
-            lastLabel = ''; buffer = '';
+            lastRule = null; buffer = '';
           }
         }
       },
@@ -533,11 +559,9 @@ export class NexusEngineUltra {
 
     return {
       results,
-      metrics: { totalTimeMs: performance.now() - globalStart, bytesProcessed, foundKeys: Object.keys(results) as AssetLabel[], successRate: foundCount / labels.length, earlyAbort: foundCount >= labels.length, source: source as DataSource },
+      metrics: { totalTimeMs: performance.now() - globalStart, bytesProcessed, foundKeys: Object.keys(results) as AssetLabel[], successRate: foundCount / rules.length, earlyAbort: foundCount >= rules.length, source: source as DataSource },
     };
   }
-
-  // Métodos Históricos e Auxiliares Restantes (Inalterados)
   static async fetchHistoricoGrafico(ticker: string, period: ChartPeriod = '1y'): Promise<HistoricalQuote[]> {
     try { return (await yf.historical(`${ticker.toUpperCase()}.SA`, { period1: periodoParaData(period), period2: new Date(), interval: '1d' })).map((r: any) => ({ ...r, date: new Date(r.date) })); } catch (e) { throw new Error(`Histórico falhou: ${(e as Error).message}`); }
   }
@@ -565,8 +589,17 @@ export class NexusEngineUltra {
       p.write(await r.text()); p.end(); return news;
     } catch (e) { return []; }
   }
-static clearCache(): void { this._cache.clear(); this._searchCache.clear(); }
-  static getCacheStats() { return { cache: { tamanho: this._cache.tamanho, tamanhoMax: this._config.cacheMaxSize, ttlMs: this._config.cacheTtlMs }, searchCache: { tamanho: this._searchCache.tamanho, ttlMs: this._config.searchCacheTtlMs }, circuitBreakers: { investidor10: this._cb.getEstado('investidor10'), statusInvest: this._cb.getEstado('statusInvest'), yahoo: this._cb.getEstado('yahoo') } }; }
+
+  static clearCache(): void { this._cache.clear(); this._searchCache.clear(); }
+  
+  static getCacheStats() { 
+    return { 
+      cache: { tamanho: this._cache.tamanho, tamanhoMax: this._config.cacheMaxSize, staleMs: this._config.cacheStaleMs, maxMs: this._config.cacheMaxMs }, 
+      searchCache: { tamanho: this._searchCache.tamanho, ttlMs: this._config.searchCacheTtlMs }, 
+      circuitBreakers: { investidor10: this._cb.getEstado('investidor10'), statusInvest: this._cb.getEstado('statusInvest') },
+      inFlightRequests: this._inFlight.size 
+    }; 
+  }
 }
 
 export async function runWithLimit<T>(tasks: Task<T>[], limit = 5): Promise<(T | Error)[]> {
