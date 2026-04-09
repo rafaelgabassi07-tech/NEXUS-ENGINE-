@@ -216,21 +216,30 @@ class CircuitBreaker {
  * Resolve o módulo yahoo-finance2 independente do sistema de módulos (CJS/ESM).
  * Substitui o bloco if-chain de 15 linhas da v1 — isolado e testável.
  */
-function resolveYahooFinance(mod: unknown): any {
+function resolveYahooFinance(mod: any): any {
   const candidatos = [
-    (mod as any)?.default?.default,
-    (mod as any)?.default,
+    mod?.default?.default,
+    mod?.default,
     mod,
   ];
+
+  // 1. Procura por uma instância já pronta (objeto com método .quote)
   for (const c of candidatos) {
-    if (c != null && typeof (c as any).quote === 'function') return c;
+    if (c && typeof c === 'object' && typeof c.quote === 'function') {
+      return c;
+    }
   }
-  // Último recurso: instanciação (improvável no yahoo-finance2 v2)
-  try {
-    const Cls = (mod as any)?.default ?? mod;
-    const inst = new (Cls as any)();
-    if (typeof inst.quote === 'function') return inst;
-  } catch { /* ignorar */ }
+
+  // 2. Se não encontrou, procura pela classe e tenta instanciar
+  for (const c of candidatos) {
+    if (typeof c === 'function') {
+      try {
+        const inst = new c();
+        if (typeof inst.quote === 'function') return inst;
+      } catch { /* ignorar erro de instanciação */ }
+    }
+  }
+
   return mod;
 }
 
@@ -504,23 +513,31 @@ export class NexusEngineUltra {
       log(`FALHA CRÍTICA: ${err.message}`);
       console.error(`[NexusEngine] Falha em ${cleanTicker} (${type}): ${err.message}`);
 
-      // ── Fallback de tipo — apenas ACAO ↔ FII (#14) ──────
+      // ── Fallback de tipo — ACAO ↔ FII ↔ BDR ↔ ETF (#14, #23, #24) ──────
       const ehTerminal = err.message.includes('404')
         || err.message.includes('410')
         || err.message.includes('Falha total');
 
-      if (!isRetry && ehTerminal && (type === 'ACAO' || type === 'FII')) {
-        const tipoFallback: ExtendedAssetType = type === 'ACAO' ? 'FII' : 'ACAO';
-        log(`Tentando fallback de tipo: ${type} → ${tipoFallback}`);
-        const fallbackResult = await this.fetchAtivo(cleanTicker, tipoFallback, true, includeNews);
-
-        if ('results' in fallbackResult) {
-          log(`Fallback bem-sucedido como ${tipoFallback} (tipo original solicitado: ${type})`);
-        }
-        return {
-          ...fallbackResult,
-          logs: [...logs, ...(fallbackResult.logs ?? [])],
+      if (!isRetry && ehTerminal) {
+        const fallbackChain: Record<ExtendedAssetType, ExtendedAssetType[]> = {
+          'ACAO': ['BDR', 'ETF', 'FII'],
+          'FII':  ['ACAO'],
+          'BDR':  ['ACAO'],
+          'ETF':  ['ACAO']
         };
+
+        const targets = fallbackChain[type] || [];
+        for (const targetType of targets) {
+          log(`Tentando fallback de tipo: ${type} → ${targetType}`);
+          const fallbackResult = await this.fetchAtivo(cleanTicker, targetType, true, includeNews);
+          if (!('error' in fallbackResult)) {
+            log(`Fallback bem-sucedido como ${targetType} (tipo original: ${type})`);
+            return {
+              ...fallbackResult,
+              logs: [...logs, ...(fallbackResult.logs ?? [])],
+            };
+          }
+        }
       }
 
       return { ticker: cleanTicker, error: err.message, cacheStatus: 'ERROR', logs };
@@ -1025,34 +1042,10 @@ export class NexusEngineUltra {
       parser.write(xml);
       parser.end();
 
-      if (news.length > 0) return news;
-      
-      // Fallback to Yahoo Finance News if Google News RSS is empty
-      const yfResult = await yf.search(cleanTicker);
-      if (yfResult.news && yfResult.news.length > 0) {
-        return yfResult.news.map((n: any) => ({
-          title: n.title,
-          link: n.link,
-          pubDate: new Date(n.providerPublishTime * 1000),
-          source: n.publisher
-        }));
-      }
-
-      return [];
+      return news;
     } catch (e) {
       console.warn(`[NexusEngine] fetchNews falhou para ${ticker}:`, (e as Error).message);
-      // Final fallback to Yahoo
-      try {
-        const yfResult = await yf.search(cleanTicker);
-        return (yfResult.news || []).map((n: any) => ({
-          title: n.title,
-          link: n.link,
-          pubDate: new Date(n.providerPublishTime * 1000),
-          source: n.publisher
-        }));
-      } catch (err) {
-        return [];
-      }
+      return [];
     }
   }
 
