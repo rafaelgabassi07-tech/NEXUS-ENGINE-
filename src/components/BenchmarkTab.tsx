@@ -24,7 +24,9 @@ import {
   Layers,
   ShieldCheck,
   Globe,
-  Flame
+  Flame,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -528,8 +530,8 @@ export function BenchmarkTab() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 glass rounded-3xl border border-slate-800/50 p-6 shadow-2xl card-shadow min-h-[400px]">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="lg:col-span-3 glass rounded-3xl border border-slate-800/50 p-5 sm:p-6 shadow-2xl card-shadow min-h-[400px]">
           
           {error && (
             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm mb-6 flex items-center gap-3">
@@ -574,102 +576,96 @@ export function BenchmarkTab() {
 
               {results ? (
                 <div className="space-y-6">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Tempo Total</p>
-                      <p className="text-2xl font-bold font-mono text-white">{(results.totalTime / 1000).toFixed(2)}s</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800">
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Tempo Total</p>
+                      <p className="text-xl font-bold font-mono text-white">{(results.totalTime / 1000).toFixed(2)}s</p>
                     </div>
-                    <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Taxa de Sucesso</p>
-                      <p className={cn("text-2xl font-bold font-mono", results.successRate === 100 ? "text-emerald-400" : "text-yellow-400")}>{results.successRate.toFixed(0)}%</p>
+                    <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800">
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Sucesso</p>
+                      <p className={cn("text-xl font-bold font-mono", results.successRate === 100 ? "text-emerald-400" : "text-yellow-400")}>{results.successRate.toFixed(0)}%</p>
                     </div>
-                    <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">P95 Latency</p>
-                      <p className="text-2xl font-bold font-mono text-blue-400">{results.p95.toFixed(0)}ms</p>
+                    <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800">
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">P95 Latency</p>
+                      <p className="text-xl font-bold font-mono text-blue-400">{results.p95.toFixed(0)}ms</p>
                     </div>
-                    <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Throughput</p>
-                      <p className="text-2xl font-bold font-mono text-indigo-400">{results.throughput.toFixed(1)} req/s</p>
+                    <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800">
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Throughput</p>
+                      <p className="text-xl font-bold font-mono text-indigo-400">{results.throughput.toFixed(1)}/s</p>
                     </div>
                   </div>
 
-                  {/* Latency Distribution Chart */}
-                  <div className="p-6 bg-slate-900/50 rounded-2xl border border-slate-800 h-[300px]">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase mb-4 flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4" /> Distribuição de Latência (ms)
-                    </h4>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={results.items.filter((r: any) => !r.error).map((r: any, i: number) => ({ name: r.ticker, time: r.metrics.totalTimeMs }))}>
-                        <defs>
-                          <linearGradient id="colorTime" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                        <XAxis dataKey="name" stroke="#64748b" fontSize={10} />
-                        <YAxis stroke="#64748b" fontSize={10} />
-                        <Tooltip 
-                          contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
-                          itemStyle={{ color: '#3b82f6', fontSize: '12px' }}
-                        />
-                        <Area type="monotone" dataKey="time" stroke="#3b82f6" fillOpacity={1} fill="url(#colorTime)" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2 p-5 bg-slate-900/50 rounded-2xl border border-slate-800 h-[240px]">
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-4 flex items-center gap-2">
+                        <TrendingUp className="w-3.5 h-3.5" /> Latência por Ativo (ms)
+                      </h4>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={results.items.filter((r: any) => !r.error).map((r: any, i: number) => ({ name: r.ticker, time: r.metrics.totalTimeMs }))}>
+                          <defs>
+                            <linearGradient id="colorTime" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/>
+                              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                          <XAxis dataKey="name" stroke="#64748b" fontSize={9} />
+                          <YAxis stroke="#64748b" fontSize={9} />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '10px' }}
+                            itemStyle={{ color: '#3b82f6', fontSize: '11px' }}
+                          />
+                          <Area type="monotone" dataKey="time" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorTime)" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-                      <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">Percentis de Latência</h4>
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-slate-500">P50 (Mediana)</span>
-                          <span className="text-xs font-mono text-slate-300">{results.p50.toFixed(0)}ms</span>
-                        </div>
-                        <div className="w-full bg-slate-800 rounded-full h-1">
-                          <div className="bg-blue-500 h-1 rounded-full" style={{ width: '50%' }} />
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-slate-500">P95</span>
-                          <span className="text-xs font-mono text-blue-400">{results.p95.toFixed(0)}ms</span>
-                        </div>
-                        <div className="w-full bg-slate-800 rounded-full h-1">
-                          <div className="bg-blue-500 h-1 rounded-full" style={{ width: '95%' }} />
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-slate-500">P99</span>
-                          <span className="text-xs font-mono text-indigo-400">{results.p99.toFixed(0)}ms</span>
-                        </div>
-                        <div className="w-full bg-slate-800 rounded-full h-1">
-                          <div className="bg-indigo-500 h-1 rounded-full" style={{ width: '99%' }} />
+                    <div className="space-y-4">
+                      <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
+                        <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-3">Percentis</h4>
+                        <div className="space-y-3">
+                          {[
+                            { label: 'P50', val: results.p50, color: 'bg-blue-500/50' },
+                            { label: 'P95', val: results.p95, color: 'bg-blue-500' },
+                            { label: 'P99', val: results.p99, color: 'bg-indigo-500' }
+                          ].map((p, i) => (
+                            <div key={i} className="space-y-1">
+                              <div className="flex justify-between items-center text-[10px]">
+                                <span className="text-slate-500">{p.label}</span>
+                                <span className="font-mono text-slate-300">{p.val.toFixed(0)}ms</span>
+                              </div>
+                              <div className="w-full bg-slate-800 rounded-full h-1">
+                                <div className={cn("h-1 rounded-full", p.color)} style={{ width: `${Math.min(100, (p.val / results.p99) * 100)}%` }} />
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    </div>
 
-                    <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-                      <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">Análise de Erros</h4>
-                      {results.successRate === 100 ? (
-                        <div className="flex flex-col items-center justify-center h-full py-4">
-                          <CheckCircle2 className="w-8 h-8 text-emerald-500 mb-2" />
-                          <p className="text-xs text-emerald-400 font-bold">100% de Confiabilidade</p>
-                          <p className="text-[10px] text-slate-500">Nenhum erro detectado.</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-xs">
-                            <span className="text-slate-500">Timeouts</span>
-                            <span className="text-red-400">0</span>
+                      <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
+                        <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2">Confiabilidade</h4>
+                        {results.successRate === 100 ? (
+                          <div className="flex items-center gap-3 py-1">
+                            <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-emerald-400 font-bold">Excelente</p>
+                              <p className="text-[9px] text-slate-500">Zero falhas detectadas.</p>
+                            </div>
                           </div>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-slate-500">WAF Blocks</span>
-                            <span className="text-red-400">0</span>
+                        ) : (
+                          <div className="flex items-center gap-3 py-1">
+                            <div className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center">
+                              <AlertTriangle className="w-4 h-4 text-red-400" />
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-red-400 font-bold">Atenção</p>
+                              <p className="text-[9px] text-slate-500">{results.totalTickers - results.items.filter((r: any) => !r.error).length} falhas.</p>
+                            </div>
                           </div>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-slate-500">Outros</span>
-                            <span className="text-red-400">{results.totalTickers - results.items.filter((r: any) => !r.error).length}</span>
-                          </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -761,241 +757,223 @@ export function BenchmarkTab() {
 
               {raceResults ? (
                 <div className="space-y-8">
-                  {/* Race Summary Chart */}
-                  <div className="p-6 bg-slate-900/50 rounded-3xl border border-slate-800 h-[350px]">
-                    <div className="flex items-center justify-between mb-6">
+                  {/* Race Leaderboard - Compact & Visual */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
                       <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                        <BarChart3 className="w-4 h-4 text-indigo-400" /> Comparativo de Performance (Tempo em ms)
+                        <BarChart3 className="w-4 h-4 text-indigo-400" /> Leaderboard de Performance
                       </h4>
-                      <button 
-                        onClick={() => exportResults(raceResults, 'race')}
-                        className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart 
-                        data={[
-                          raceResults.nexus,
-                          raceResults.legacy,
-                          raceResults.rust,
-                          raceResults.go,
-                          raceResults.scrapy,
-                          raceResults.puppeteer,
-                          ...(raceResults.endpoint ? [raceResults.endpoint] : []),
-                          ...(raceResults.custom ? [raceResults.custom] : [])
-                        ].sort((a, b) => a.time - b.time)}
-                        layout="vertical"
-                        margin={{ left: 40, right: 40 }}
-                      >
-                        <XAxis type="number" hide />
-                        <YAxis 
-                          dataKey="name" 
-                          type="category" 
-                          stroke="#64748b" 
-                          fontSize={10} 
-                          width={100}
-                        />
-                        <Tooltip 
-                          cursor={{ fill: '#1e293b', opacity: 0.4 }}
-                          contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
-                          itemStyle={{ fontSize: '12px' }}
-                        />
-                        <Bar dataKey="time" radius={[0, 4, 4, 0]} barSize={20}>
-                          {[
-                            raceResults.nexus,
-                            raceResults.legacy,
-                            raceResults.rust,
-                            raceResults.go,
-                            raceResults.scrapy,
-                            raceResults.puppeteer,
-                            ...(raceResults.endpoint ? [raceResults.endpoint] : []),
-                            ...(raceResults.custom ? [raceResults.custom] : [])
-                          ].sort((a, b) => a.time - b.time).map((entry, index) => (
-                            <Cell 
-                              key={`cell-${index}`} 
-                              fill={entry.name === 'Nexus Engine' ? '#3b82f6' : entry.name === 'Legacy (Cheerio)' ? '#64748b' : '#334155'} 
-                            />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {/* BENTO CARDS */}
-                    {[
-                      raceResults.nexus,
-                      raceResults.legacy,
-                      raceResults.rust,
-                      raceResults.go,
-                      raceResults.scrapy,
-                      raceResults.puppeteer,
-                      ...(raceResults.endpoint ? [raceResults.endpoint] : []),
-                      ...(raceResults.custom ? [raceResults.custom] : [])
-                    ].map((item, idx) => (
-                      <div 
-                        key={idx} 
-                        className={cn(
-                          "p-5 rounded-2xl border transition-all relative overflow-hidden group",
-                          item.name === 'Nexus Engine' 
-                            ? "bg-blue-600/10 border-blue-500/30 ring-1 ring-blue-500/20" 
-                            : "bg-slate-900/40 border-slate-800 hover:border-slate-700"
-                        )}
-                      >
-                        {item.name === 'Nexus Engine' && (
-                          <div className="absolute top-0 right-0 p-2">
-                            <Zap className="w-4 h-4 text-blue-400 fill-blue-400/20" />
-                          </div>
-                        )}
-                        
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className={cn(
-                            "w-8 h-8 rounded-lg flex items-center justify-center",
-                            item.name === 'Nexus Engine' ? "bg-blue-500 text-white" : "bg-slate-800 text-slate-400"
-                          )}>
-                            {item.name === 'Nexus Engine' ? <Zap className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
-                          </div>
-                          <div>
-                            <h5 className="text-sm font-bold text-white">{item.name}</h5>
-                            <p className="text-[10px] text-slate-500 font-mono">{item.arch}</p>
-                          </div>
-                        </div>
-
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-end">
-                            <span className="text-[10px] text-slate-500 uppercase font-bold">Tempo</span>
-                            <span className={cn(
-                              "text-lg font-mono font-bold",
-                              item.name === 'Nexus Engine' ? "text-blue-400" : "text-slate-300"
-                            )}>
-                              {(item.time / 1000).toFixed(2)}s
-                            </span>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="p-2 bg-slate-950/50 rounded-lg border border-slate-800/50">
-                              <p className="text-[8px] text-slate-500 uppercase">Sucesso</p>
-                              <p className={cn(
-                                "text-xs font-mono font-bold",
-                                item.successRate >= 90 ? "text-emerald-400" : "text-red-400"
-                              )}>{item.successRate.toFixed(0)}%</p>
-                            </div>
-                            <div className="p-2 bg-slate-950/50 rounded-lg border border-slate-800/50">
-                              <p className="text-[8px] text-slate-500 uppercase">Custo/1M</p>
-                              <p className="text-xs font-mono font-bold text-slate-300">${item.cost.toFixed(2)}</p>
-                            </div>
-                          </div>
-
-                          <div className="pt-2 border-t border-slate-800/50">
-                            <div className="flex justify-between items-center text-[9px]">
-                              <span className="text-slate-500">Infraestrutura</span>
-                              <span className="text-slate-400 font-bold">{item.infra}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Infrastructure & Architecture Deep Dive */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="glass rounded-3xl border border-slate-800/50 p-6">
-                      <h4 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                        <Cpu className="w-4 h-4 text-emerald-400" /> Eficiência de Recursos
-                      </h4>
-                      <div className="h-[200px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={[
-                            { name: 'Nexus', mem: raceResults.nexus.memory, cpu: raceResults.nexus.cpu / 10 },
-                            { name: 'Legacy', mem: raceResults.legacy.memory, cpu: raceResults.legacy.cpu / 10 },
-                            { name: 'Puppeteer', mem: raceResults.puppeteer.memory, cpu: raceResults.puppeteer.cpu / 10 },
-                            { name: 'Rust', mem: raceResults.rust.memory, cpu: raceResults.rust.cpu / 10 }
-                          ]}>
-                            <XAxis dataKey="name" stroke="#64748b" fontSize={10} />
-                            <Tooltip 
-                              contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
-                            />
-                            <Bar dataKey="mem" name="Memória (MB)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                            <Bar dataKey="cpu" name="CPU (ms/10)" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => exportResults(raceResults, 'race')}
+                          className="p-1.5 bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all"
+                          title="Exportar JSON"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
 
-                    <div className="glass rounded-3xl border border-slate-800/50 p-6">
-                      <h4 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                        <Globe className="w-4 h-4 text-blue-400" /> Impacto Ambiental (CO2)
-                      </h4>
-                      <div className="space-y-4">
-                        {[
-                          { name: 'Nexus Engine', impact: 'Ultra Low', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                          { name: 'Legacy Scraper', impact: 'Medium', color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
-                          { name: 'Puppeteer Cluster', impact: 'High', color: 'text-red-400', bg: 'bg-red-500/10' }
-                        ].map((env, i) => (
-                          <div key={i} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-slate-800">
-                            <span className="text-xs text-slate-300 font-bold">{env.name}</span>
-                            <span className={cn("px-2 py-1 rounded-lg text-[10px] font-bold uppercase", env.bg, env.color)}>
-                              {env.impact}
-                            </span>
-                          </div>
-                        ))}
-                        <p className="text-[10px] text-slate-500 italic">
-                          * Estimativa baseada no consumo de CPU e tempo de execução em instâncias AWS/GCP padrão.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Detailed Comparison Table */}
-                  <div className="mt-8 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/30 scrollbar-hide">
-                    <table className="w-full text-left text-[10px] sm:text-xs min-w-[500px]">
-                      <thead className="bg-slate-800/50 text-slate-400 font-bold uppercase tracking-wider">
-                        <tr>
-                          <th className="px-3 sm:px-4 py-3">Ticker</th>
-                          <th className="px-3 sm:px-4 py-3">Status Padrão</th>
-                          <th className="px-3 sm:px-4 py-3">Status Nexus</th>
-                          <th className="px-3 sm:px-4 py-3">Vantagem Nexus</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800">
-                        {raceResults.tickers.map((ticker: string, idx: number) => {
-                          const legacy = raceResults.legacy.results[idx];
-                          const nexus = raceResults.nexus.results[idx];
-                          const legacyTime = legacy?.metrics?.totalTimeMs || 0;
-                          const nexusTime = nexus?.metrics?.totalTimeMs || 0;
-                          const diff = legacyTime - nexusTime;
-                          
-                          return (
-                            <tr key={ticker} className="hover:bg-slate-800/20 transition-colors">
-                              <td className="px-3 sm:px-4 py-3 font-bold text-white">{ticker}</td>
-                              <td className="px-3 sm:px-4 py-3">
-                                {legacy?.error ? (
-                                  <span className="text-red-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Erro</span>
-                                ) : (
-                                  <span className="text-slate-300 font-mono">{legacyTime.toFixed(0)}ms</span>
-                                )}
-                              </td>
-                              <td className="px-3 sm:px-4 py-3">
-                                {nexus?.error ? (
-                                  <span className="text-red-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Erro</span>
-                                ) : (
-                                  <span className="text-blue-400 font-mono font-bold">{nexusTime.toFixed(0)}ms</span>
-                                )}
-                              </td>
-                              <td className="px-3 sm:px-4 py-3">
-                                {diff > 0 ? (
-                                  <span className="text-emerald-400 font-bold">-{((diff / legacyTime) * 100).toFixed(0)}% tempo</span>
-                                ) : (
-                                  <span className="text-slate-500">N/A</span>
-                                )}
-                              </td>
+                    <div className="glass-dark border border-white/5 rounded-2xl overflow-hidden">
+                      <div className="overflow-x-auto scrollbar-hide">
+                        <table className="w-full text-left border-collapse min-w-[600px]">
+                          <thead>
+                            <tr className="bg-slate-800/30 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                              <th className="px-4 py-3">Arquitetura</th>
+                              <th className="px-4 py-3">Tempo (s)</th>
+                              <th className="px-4 py-3">Sucesso</th>
+                              <th className="px-4 py-3">Custo/1M</th>
+                              <th className="px-4 py-3">Eficiência</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {[
+                              raceResults.nexus,
+                              raceResults.legacy,
+                              raceResults.rust,
+                              raceResults.go,
+                              raceResults.scrapy,
+                              raceResults.puppeteer,
+                              ...(raceResults.endpoint ? [raceResults.endpoint] : []),
+                              ...(raceResults.custom ? [raceResults.custom] : [])
+                            ].sort((a, b) => a.time - b.time).map((item, idx) => {
+                              const isNexus = item.name === 'Nexus Engine';
+                              const bestTime = Math.min(...[raceResults.nexus, raceResults.legacy, raceResults.rust, raceResults.go, raceResults.scrapy, raceResults.puppeteer].map(i => i.time));
+                              const efficiency = (bestTime / item.time) * 100;
+
+                              return (
+                                <tr key={idx} className={cn(
+                                  "group transition-colors",
+                                  isNexus ? "bg-blue-600/5 hover:bg-blue-600/10" : "hover:bg-white/5"
+                                )}>
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center gap-3">
+                                      <div className={cn(
+                                        "w-6 h-6 rounded flex items-center justify-center shrink-0",
+                                        isNexus ? "bg-blue-500 text-white" : "bg-slate-800 text-slate-500"
+                                      )}>
+                                        {isNexus ? <Zap className="w-3 h-3" /> : <Layers className="w-3 h-3" />}
+                                      </div>
+                                      <div>
+                                        <p className={cn("text-xs font-bold", isNexus ? "text-blue-400" : "text-white")}>{item.name}</p>
+                                        <p className="text-[9px] text-slate-500 font-mono uppercase">{item.arch}</p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className="space-y-1">
+                                      <p className={cn("text-xs font-mono font-bold", isNexus ? "text-blue-400" : "text-slate-300")}>
+                                        {(item.time / 1000).toFixed(2)}s
+                                      </p>
+                                      <div className="w-24 bg-slate-800 rounded-full h-1 overflow-hidden">
+                                        <div 
+                                          className={cn("h-full rounded-full", isNexus ? "bg-blue-500" : "bg-slate-600")} 
+                                          style={{ width: `${Math.min(100, (bestTime / item.time) * 100)}%` }} 
+                                        />
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span className={cn(
+                                      "text-[10px] font-bold px-2 py-0.5 rounded-full",
+                                      item.successRate >= 90 ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
+                                    )}>
+                                      {item.successRate.toFixed(0)}%
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-xs font-mono text-slate-400">
+                                    ${item.cost.toFixed(2)}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center gap-1.5">
+                                      <div className={cn(
+                                        "w-1.5 h-1.5 rounded-full",
+                                        efficiency > 80 ? "bg-emerald-500" : efficiency > 40 ? "bg-yellow-500" : "bg-red-500"
+                                      )} />
+                                      <span className="text-[10px] font-bold text-slate-500">{efficiency.toFixed(0)}%</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expandable Deep Dive Section */}
+                  <div className="mt-4">
+                    <details className="group glass-dark border border-white/5 rounded-2xl overflow-hidden">
+                      <summary className="flex items-center justify-between p-4 cursor-pointer hover:bg-white/5 transition-colors list-none">
+                        <div className="flex items-center gap-2">
+                          <Activity className="w-4 h-4 text-indigo-400" />
+                          <h4 className="text-sm font-bold text-white">Métricas de Infraestrutura & Impacto</h4>
+                        </div>
+                        <ChevronDown className="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform" />
+                      </summary>
+                      <div className="p-6 border-t border-white/5 space-y-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          <div>
+                            <h5 className="text-xs font-bold text-slate-400 uppercase mb-4 flex items-center gap-2">
+                              <Cpu className="w-3.5 h-3.5 text-emerald-400" /> Eficiência de Recursos
+                            </h5>
+                            <div className="h-[200px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={[
+                                  { name: 'Nexus', mem: raceResults.nexus.memory, cpu: raceResults.nexus.cpu / 10 },
+                                  { name: 'Legacy', mem: raceResults.legacy.memory, cpu: raceResults.legacy.cpu / 10 },
+                                  { name: 'Puppeteer', mem: raceResults.puppeteer.memory, cpu: raceResults.puppeteer.cpu / 10 },
+                                  { name: 'Rust', mem: raceResults.rust.memory, cpu: raceResults.rust.cpu / 10 }
+                                ]}>
+                                  <XAxis dataKey="name" stroke="#64748b" fontSize={10} />
+                                  <Tooltip 
+                                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
+                                  />
+                                  <Bar dataKey="mem" name="Memória (MB)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                  <Bar dataKey="cpu" name="CPU (ms/10)" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+
+                          <div>
+                            <h5 className="text-xs font-bold text-slate-400 uppercase mb-4 flex items-center gap-2">
+                              <Globe className="w-3.5 h-3.5 text-blue-400" /> Impacto Ambiental (CO2)
+                            </h5>
+                            <div className="space-y-3">
+                              {[
+                                { name: 'Nexus Engine', impact: 'Ultra Low', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+                                { name: 'Legacy Scraper', impact: 'Medium', color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+                                { name: 'Puppeteer Cluster', impact: 'High', color: 'text-red-400', bg: 'bg-red-500/10' }
+                              ].map((env, i) => (
+                                <div key={i} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-slate-800">
+                                  <span className="text-xs text-slate-300 font-bold">{env.name}</span>
+                                  <span className={cn("px-2 py-1 rounded-lg text-[10px] font-bold uppercase", env.bg, env.color)}>
+                                    {env.impact}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Detailed Comparison Table - Now inside deep dive */}
+                        <div className="space-y-4">
+                          <h5 className="text-xs font-bold text-slate-400 uppercase flex items-center gap-2">
+                            <History className="w-3.5 h-3.5 text-indigo-400" /> Detalhamento por Ativo
+                          </h5>
+                          <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/30 scrollbar-hide">
+                            <table className="w-full text-left text-[10px] sm:text-xs min-w-[500px]">
+                              <thead className="bg-slate-800/50 text-slate-400 font-bold uppercase tracking-wider">
+                                <tr>
+                                  <th className="px-3 sm:px-4 py-3">Ticker</th>
+                                  <th className="px-3 sm:px-4 py-3">Status Padrão</th>
+                                  <th className="px-3 sm:px-4 py-3">Status Nexus</th>
+                                  <th className="px-3 sm:px-4 py-3">Vantagem Nexus</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-800">
+                                {raceResults.tickers.map((ticker: string, idx: number) => {
+                                  const legacy = raceResults.legacy.results[idx];
+                                  const nexus = raceResults.nexus.results[idx];
+                                  const legacyTime = legacy?.metrics?.totalTimeMs || 0;
+                                  const nexusTime = nexus?.metrics?.totalTimeMs || 0;
+                                  const diff = legacyTime - nexusTime;
+                                  
+                                  return (
+                                    <tr key={ticker} className="hover:bg-slate-800/20 transition-colors">
+                                      <td className="px-3 sm:px-4 py-3 font-bold text-white">{ticker}</td>
+                                      <td className="px-3 sm:px-4 py-3">
+                                        {legacy?.error ? (
+                                          <span className="text-red-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Erro</span>
+                                        ) : (
+                                          <span className="text-slate-300 font-mono">{legacyTime.toFixed(0)}ms</span>
+                                        )}
+                                      </td>
+                                      <td className="px-3 sm:px-4 py-3">
+                                        {nexus?.error ? (
+                                          <span className="text-red-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Erro</span>
+                                        ) : (
+                                          <span className="text-blue-400 font-mono font-bold">{nexusTime.toFixed(0)}ms</span>
+                                        )}
+                                      </td>
+                                      <td className="px-3 sm:px-4 py-3">
+                                        {diff > 0 ? (
+                                          <span className="text-emerald-400 font-bold">-{((diff / legacyTime) * 100).toFixed(0)}% tempo</span>
+                                        ) : (
+                                          <span className="text-slate-500">N/A</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </details>
                   </div>
 
                   {/* Verdict Section */}
@@ -1081,74 +1059,53 @@ export function BenchmarkTab() {
 
                 {analysis && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-                        <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Score Arquitetural</p>
-                        <p className={cn("text-3xl font-bold font-mono", analysis.score > 70 ? "text-emerald-400" : analysis.score > 40 ? "text-yellow-400" : "text-red-400")}>
-                          {analysis.score}/100
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800 text-center">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Score</p>
+                        <p className={cn("text-xl font-bold font-mono", analysis.score > 70 ? "text-emerald-400" : analysis.score > 40 ? "text-yellow-400" : "text-red-400")}>
+                          {analysis.score}
                         </p>
                       </div>
-                      <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-                        <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Resiliência Est.</p>
-                        <p className="text-3xl font-bold font-mono text-blue-400">{analysis.simulatedMetrics.resilience}%</p>
+                      <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800 text-center">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Resiliência</p>
+                        <p className="text-xl font-bold font-mono text-blue-400">{analysis.simulatedMetrics.resilience}%</p>
                       </div>
-                      <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-                        <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Arquivos Analisados</p>
-                        <p className="text-3xl font-bold font-mono text-indigo-400">{uploadedFiles.length + 1}</p>
+                      <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800 text-center">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase mb-0.5">Arquivos</p>
+                        <p className="text-xl font-bold font-mono text-indigo-400">{uploadedFiles.length + 1}</p>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="p-4 bg-red-500/5 border border-red-500/20 rounded-2xl">
-                        <h4 className="text-xs font-bold text-red-400 uppercase mb-3 flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4" /> Pontos Fracos
+                      <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+                        <h4 className="text-[10px] font-bold text-red-400 uppercase mb-3 flex items-center gap-2">
+                          <AlertTriangle className="w-3.5 h-3.5" /> Fraquezas
                         </h4>
-                        <ul className="space-y-2">
+                        <ul className="space-y-1.5">
                           {analysis.weaknesses.map((w: string, i: number) => (
-                            <li key={i} className="text-xs text-slate-400 flex gap-2">
-                              <span className="text-red-500">•</span> {w}
+                            <li key={i} className="text-[11px] text-slate-400 flex gap-2">
+                              <span className="text-red-500 shrink-0">•</span> {w}
                             </li>
                           ))}
                         </ul>
                       </div>
-                      <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl">
-                        <h4 className="text-xs font-bold text-emerald-400 uppercase mb-3 flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4" /> Pontos Fortes
+                      <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+                        <h4 className="text-[10px] font-bold text-emerald-400 uppercase mb-3 flex items-center gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Pontos Fortes
                         </h4>
-                        <ul className="space-y-2">
+                        <ul className="space-y-1.5">
                           {analysis.strengths.map((s: string, i: number) => (
-                            <li key={i} className="text-xs text-slate-400 flex gap-2">
-                              <span className="text-emerald-500">•</span> {s}
+                            <li key={i} className="text-[11px] text-slate-400 flex gap-2">
+                              <span className="text-emerald-500 shrink-0">•</span> {s}
                             </li>
                           ))}
                         </ul>
                       </div>
                     </div>
 
-                    {analysis.fileBreakdown.length > 0 && (
-                      <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-                        <h4 className="text-xs font-bold text-slate-300 uppercase mb-3">Detalhamento por Arquivo</h4>
-                        <div className="space-y-2">
-                          {analysis.fileBreakdown.map((file: any, i: number) => (
-                            <div key={i} className="flex items-center justify-between p-2 bg-slate-950 rounded-lg border border-slate-800">
-                              <div className="flex items-center gap-2">
-                                <FileCode className="w-3.5 h-3.5 text-blue-400" />
-                                <span className="text-xs text-slate-300">{file.name}</span>
-                              </div>
-                              <div className="flex gap-1">
-                                {file.findings.map((f: string, j: number) => (
-                                  <span key={j} className="px-1.5 py-0.5 bg-slate-800 text-[9px] text-slate-500 rounded border border-slate-700">{f}</span>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
                     <div className="p-4 bg-blue-900/10 border border-blue-500/20 rounded-2xl">
-                      <h4 className="text-xs font-bold text-blue-400 uppercase mb-2">Veredito Nexus</h4>
-                      <p className="text-xs text-slate-400 leading-relaxed">{analysis.nexusComparison}</p>
+                      <h4 className="text-[10px] font-bold text-blue-400 uppercase mb-1.5">Veredito Nexus</h4>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">{analysis.nexusComparison}</p>
                     </div>
                   </motion.div>
                 )}
@@ -1160,54 +1117,54 @@ export function BenchmarkTab() {
           {activeTab === 'history' && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold font-display text-white flex items-center gap-2">
-                  <History className="w-5 h-5 text-slate-400" />
-                  Histórico de Benchmarks
+                <h3 className="text-lg font-bold font-display text-white flex items-center gap-2">
+                  <History className="w-4 h-4 text-slate-400" />
+                  Histórico
                 </h3>
                 <button 
                   onClick={clearHistory}
-                  className="text-xs text-red-400 hover:text-red-300 font-bold flex items-center gap-1"
+                  className="text-[10px] text-red-400 hover:text-red-300 font-bold flex items-center gap-1 uppercase tracking-wider"
                 >
-                  <X className="w-3 h-3" /> Limpar Tudo
+                  <X className="w-3 h-3" /> Limpar
                 </button>
               </div>
 
               {benchmarkHistory.length > 0 ? (
-                <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {benchmarkHistory.map((item) => (
-                    <div key={item.id} className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800 hover:border-slate-700 transition-all group">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
+                    <div key={item.id} className="p-3 bg-slate-900/50 rounded-xl border border-slate-800 hover:border-slate-700 transition-all group relative overflow-hidden">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
                           <div className={cn(
-                            "p-2 rounded-lg",
+                            "p-1.5 rounded-lg",
                             item.type === 'load' ? "bg-blue-500/10 text-blue-400" : "bg-indigo-500/10 text-indigo-400"
                           )}>
-                            {item.type === 'load' ? <Activity className="w-4 h-4" /> : <Swords className="w-4 h-4" />}
+                            {item.type === 'load' ? <Activity className="w-3.5 h-3.5" /> : <Swords className="w-3.5 h-3.5" />}
                           </div>
                           <div>
-                            <p className="text-sm font-bold text-white capitalize">{item.type === 'load' ? 'Teste de Carga' : 'Corrida'}</p>
-                            <p className="text-[10px] text-slate-500">{new Date(item.timestamp).toLocaleString()}</p>
+                            <p className="text-[11px] font-bold text-white capitalize">{item.type === 'load' ? 'Carga' : 'Corrida'}</p>
+                            <p className="text-[9px] text-slate-500">{new Date(item.timestamp).toLocaleDateString()}</p>
                           </div>
                         </div>
                         <button 
                           onClick={() => exportResults(item, item.type)}
-                          className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
+                          className="p-1.5 bg-slate-800 rounded-lg text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
                         >
-                          <Download className="w-4 h-4" />
+                          <Download className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      <div className="grid grid-cols-3 gap-4">
+                      <div className="flex justify-between items-center px-1">
                         <div className="text-center">
-                          <p className="text-[9px] text-slate-500 uppercase">Tempo</p>
-                          <p className="text-sm font-mono text-slate-300">{(item.totalTime || item.nexus.time / 1000).toFixed(2)}s</p>
+                          <p className="text-[8px] text-slate-500 uppercase">Tempo</p>
+                          <p className="text-[11px] font-mono text-slate-300">{(item.totalTime || item.nexus.time / 1000).toFixed(2)}s</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-[9px] text-slate-500 uppercase">Sucesso</p>
-                          <p className="text-sm font-mono text-emerald-400">{item.successRate?.toFixed(0) || item.nexus.successRate?.toFixed(0)}%</p>
+                          <p className="text-[8px] text-slate-500 uppercase">Sucesso</p>
+                          <p className="text-[11px] font-mono text-emerald-400">{item.successRate?.toFixed(0) || item.nexus.successRate?.toFixed(0)}%</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-[9px] text-slate-500 uppercase">Ativos</p>
-                          <p className="text-sm font-mono text-slate-300">{item.totalTickers || item.tickers?.length}</p>
+                          <p className="text-[8px] text-slate-500 uppercase">Ativos</p>
+                          <p className="text-[11px] font-mono text-slate-300">{item.totalTickers || item.tickers?.length}</p>
                         </div>
                       </div>
                     </div>
@@ -1215,66 +1172,74 @@ export function BenchmarkTab() {
                 </div>
               ) : (
                 <div className="h-[200px] flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-800 rounded-2xl">
-                  <History className="w-12 h-12 mb-4 opacity-20" />
-                  <p>Nenhum benchmark salvo ainda.</p>
+                  <History className="w-10 h-10 mb-3 opacity-20" />
+                  <p className="text-sm">Nenhum benchmark salvo.</p>
                 </div>
               )}
             </div>
           )}
         </div>
         <div className="space-y-6">
-          <div className="glass rounded-3xl border border-slate-800/50 p-6 shadow-2xl card-shadow">
-            <h3 className="text-sm font-bold font-display text-white flex items-center gap-2 mb-4">
-              <Database className="w-4 h-4 text-indigo-400" />
-              Métricas do Motor (Ao Vivo)
+          <div className="glass rounded-3xl border border-slate-800/50 p-5 shadow-2xl card-shadow">
+            <h3 className="text-[11px] font-bold font-display text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-5">
+              <Database className="w-3.5 h-3.5 text-indigo-400" />
+              Status do Motor
             </h3>
             
             {stats ? (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-slate-400">Uso do Cache Principal</span>
+                  <div className="flex justify-between text-[10px] mb-1.5">
+                    <span className="text-slate-500 font-bold uppercase tracking-wider">Cache Principal</span>
                     <span className="text-white font-mono">{stats.cache.tamanho} / {stats.cache.tamanhoMax}</span>
                   </div>
-                  <div className="w-full bg-slate-800 rounded-full h-1.5">
+                  <div className="w-full bg-slate-800 rounded-full h-1 overflow-hidden">
                     <div 
-                      className="bg-indigo-500 h-1.5 rounded-full transition-all" 
+                      className="bg-indigo-500 h-full rounded-full transition-all duration-1000" 
                       style={{ width: `${(stats.cache.tamanho / stats.cache.tamanhoMax) * 100}%` }}
                     />
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Req. em Voo</p>
-                    <p className="text-lg font-bold font-mono text-white">{stats.inFlightRequests}</p>
+                <div className="grid grid-cols-1 gap-2">
+                  <div className="p-3 bg-slate-900/30 rounded-xl border border-white/5 flex items-center justify-between">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Em Voo</span>
+                    <span className="text-sm font-bold font-mono text-white">{stats.inFlightRequests}</span>
                   </div>
-                  <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-800">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">URL Deduplicadas</p>
-                    <p className="text-lg font-bold font-mono text-white">{stats.urlInFlightRequests}</p>
+                  <div className="p-3 bg-slate-900/30 rounded-xl border border-white/5 flex items-center justify-between">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Deduplicadas</span>
+                    <span className="text-sm font-bold font-mono text-white">{stats.urlInFlightRequests}</span>
                   </div>
                 </div>
 
-                <div className="space-y-2 pt-2 border-t border-slate-800">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Circuit Breakers</p>
+                <div className="space-y-2.5 pt-4 border-t border-white/5">
+                  <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-1">Circuit Breakers</p>
                   {Object.entries(stats.circuitBreakers).map(([key, state]) => (
                     <div key={key} className="flex items-center justify-between">
-                      <span className="text-xs text-slate-300 capitalize">{key}</span>
-                      <span className={cn(
-                        "text-[10px] font-bold px-2 py-0.5 rounded",
-                        state === 'FECHADO' ? "bg-emerald-500/10 text-emerald-400" :
-                        state === 'SEMI_ABERTO' ? "bg-yellow-500/10 text-yellow-400" :
-                        "bg-red-500/10 text-red-400"
-                      )}>
-                        {String(state)}
-                      </span>
+                      <span className="text-[10px] text-slate-400 capitalize">{key}</span>
+                      <div className="flex items-center gap-2">
+                        <div className={cn(
+                          "w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.5)]",
+                          state === 'FECHADO' ? "bg-emerald-500 shadow-emerald-500/50" :
+                          state === 'SEMI_ABERTO' ? "bg-yellow-500 shadow-yellow-500/50" :
+                          "bg-red-500 shadow-red-500/50"
+                        )} />
+                        <span className={cn(
+                          "text-[9px] font-bold uppercase tracking-tighter",
+                          state === 'FECHADO' ? "text-emerald-400" :
+                          state === 'SEMI_ABERTO' ? "text-yellow-400" :
+                          "text-red-400"
+                        )}>
+                          {String(state)}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
               <div className="flex items-center justify-center h-32 text-slate-500">
-                <RefreshCw className="w-5 h-5 animate-spin" />
+                <RefreshCw className="w-5 h-5 animate-spin opacity-20" />
               </div>
             )}
           </div>

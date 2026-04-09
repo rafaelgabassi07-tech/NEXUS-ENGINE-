@@ -1,5 +1,5 @@
 import { useState, useEffect, type MouseEvent } from 'react';
-import { Activity, Play, Zap, Code2, Globe, BarChart3, ChevronDown, ChevronUp, Copy, ArrowUp } from 'lucide-react';
+import { Activity, Play, Zap, Code2, Globe, BarChart3, ChevronDown, ChevronUp, Copy, ArrowUp, Download } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import nexusCode from '../lib/nexus-core.ts?raw';
@@ -83,6 +83,26 @@ export default function HomePage() {
     }
   };
 
+  const handleDownload = () => {
+    try {
+      const blob = new Blob(['\ufeff', nexusCode], { type: 'text/plain;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'nexus-engine.ts');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed:', error);
+      const a = document.createElement('a');
+      a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(nexusCode);
+      a.download = 'nexus-engine.ts';
+      a.click();
+    }
+  };
+
   return (
     <main className="pt-24 pb-20 relative">
       {/* Decorative Grid Background */}
@@ -100,7 +120,7 @@ export default function HomePage() {
           className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold uppercase tracking-widest mb-8 shadow-[0_0_20px_rgba(59,130,246,0.15)]"
         >
           <Zap className="w-3 h-3 animate-pulse" />
-          <span>Nexus Engine 9.0-Ultra</span>
+          <span>Nexus Engine 10.1-Ultra</span>
         </motion.div>
         
         <motion.h1 
@@ -118,7 +138,7 @@ export default function HomePage() {
           transition={{ delay: 0.2, duration: 0.6 }}
           className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto mb-12 leading-relaxed font-light tracking-tight"
         >
-          Performance extrema com <span className="text-white font-medium">Nexus Engine 9.0-Ultra</span>. Orquestração Híbrida e Cache SWR para dados financeiros em milissegundos.
+          Performance extrema com <span className="text-white font-medium">Nexus Engine 10.1-Ultra</span>. Orquestração Híbrida e Cache SWR para dados financeiros em milissegundos.
         </motion.p>
         
         <motion.div 
@@ -236,13 +256,23 @@ export default function HomePage() {
                 <span className="text-[10px] font-mono text-slate-400 ml-3">nexus-engine.ts</span>
               </div>
             </div>
-            <button 
-              onClick={() => navigator.clipboard.writeText(nexusCode)}
-              className="text-[10px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors"
-            >
-              <Copy className="w-3 h-3" />
-              Copiar
-            </button>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={handleDownload}
+                className="text-[10px] font-bold text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors"
+                title="Baixar arquivo .ts"
+              >
+                <Download className="w-3 h-3" />
+                Baixar
+              </button>
+              <button 
+                onClick={() => navigator.clipboard.writeText(nexusCode)}
+                className="text-[10px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors"
+              >
+                <Copy className="w-3 h-3" />
+                Copiar
+              </button>
+            </div>
           </div>
           <div className={cn("p-5 overflow-x-auto bg-slate-950/80 relative transition-all duration-500", isCodeExpanded ? "max-h-none" : "max-h-[300px] overflow-hidden")}>
             <pre className="text-xs font-mono leading-relaxed text-slate-300">

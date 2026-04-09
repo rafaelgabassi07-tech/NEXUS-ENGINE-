@@ -25,7 +25,7 @@ export interface NewsItem {
   source: string;
 }
 
-export type AcaoLabel = 'P/L' | 'Dividend Yield' | 'P/VP' | 'VPA' | 'ROE' | 'ROIC' | 'Margem Líquida' | 'Margem Bruta' | 'Margem EBIT' | 'EV/EBITDA' | 'Dívida Líquida / Patrimônio' | 'Dívida Líquida / EBITDA' | 'CAGR Receitas 5 Anos' | 'LPA' | 'PEG Ratio' | 'P/EBIT' | 'P/Ativo' | 'PSR' | 'Giro Ativos' | 'Dívida Bruta / Patrimônio' | 'Preço Atual' | 'Variação (24h)' | 'Setor' | 'Subsetor' | 'Segmento';
+export type AcaoLabel = 'P/L' | 'Dividend Yield' | 'P/VP' | 'VPA' | 'ROE' | 'ROIC' | 'Margem Líquida' | 'Margem Bruta' | 'Margem EBIT' | 'EV/EBITDA' | 'Dívida Líquida / Patrimônio' | 'Dívida Líquida / EBITDA' | 'CAGR Receitas 5 Anos' | 'LPA' | 'PEG Ratio' | 'P/EBIT' | 'P/Ativo' | 'PSR' | 'Giro Ativos' | 'Dívida Bruta / Patrimônio' | 'Preço Atual' | 'Variação (24h)' | 'Setor' | 'Subsetor' | 'Segmento' | 'ROA';
 export type FiiLabel = 'Dividend Yield' | 'P/VP' | 'Valor Patrimonial' | 'Liquidez Diária' | 'Último Rendimento' | 'Vacância Física' | 'Vacância Financeira' | 'Quantidade Ativos' | 'Patrimônio Líquido' | 'Valor de Mercado' | 'P/Ativo' | 'Preço Atual' | 'Variação (24h)' | 'Segmento';
 export type EtfLabel = 'Taxa de Administração';
 export type AssetLabel = AcaoLabel | FiiLabel | EtfLabel;

@@ -44,6 +44,7 @@ interface YahooQuoteData {
   epsTrailingTwelveMonths?: number; trailingAnnualDividendYield?: number;
   marketCap?: number; profitMargins?: number; returnOnEquity?: number;
   revenuePerShare?: number; symbol?: string;
+  debtToEquity?: number; currentRatio?: number; returnOnAssets?: number;
 }
 
 interface CacheEntry { data: FetchAtivoResult; timestamp: number; }
@@ -65,6 +66,12 @@ const RE_SA       = /\.SA$/i;
 const RE_BDR      = /3[2-5]$/;
 const RE_NUMERO   = /^[\d,.\-]+[%MkKB]?$/;
 const RE_PERCENT  = /%/;
+const RE_HOSTNAME = /^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?]+)/im;
+
+/** OTIMIZAÇÃO: Dicionário de períodos movido para constante de módulo */
+const DIAS_POR_PERIODO: Record<string, number> = {
+  '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '5y': 1825, 'max': 10950
+};
 
 /**
  * OTIMIZAÇÃO: Lista de ETFs expandida — a original tinha apenas 10,
@@ -114,10 +121,7 @@ function backoffMs(tentativa: number, base = 300, teto = 8_000): number {
 }
 
 function periodoParaData(periodo: ChartPeriod): Date {
-  const diasPorPeriodo: Record<string, number> = {
-    '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '5y': 1825, 'max': 10950
-  };
-  return new Date(Date.now() - (diasPorPeriodo[periodo] ?? 365) * 86_400_000);
+  return new Date(Date.now() - (DIAS_POR_PERIODO[periodo] ?? 365) * 86_400_000);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -140,14 +144,14 @@ const YAHOO_HOSTS = ['query1', 'query2'];
 async function yahooQuote(ticker: string): Promise<YahooQuoteData> {
   const symbols = [`${ticker}.SA`, ticker.toUpperCase()];
   for (const symbol of symbols) {
-    for (const host of YAHOO_HOSTS) {
-      try {
+    try {
+      const results = await Promise.any(YAHOO_HOSTS.map(async (host) => {
         const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d&includePrePost=false`;
         const res = await fetchWithTimeout(url, 5000);
-        if (!res.ok) continue;
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const meta = json?.chart?.result?.[0]?.meta;
-        if (!meta) continue;
+        if (!meta) throw new Error('Meta not found');
         return {
           symbol,
           regularMarketPrice: meta.regularMarketPrice,
@@ -161,54 +165,86 @@ async function yahooQuote(ticker: string): Promise<YahooQuoteData> {
           trailingAnnualDividendYield: meta.trailingAnnualDividendYield,
           marketCap: meta.marketCap,
         };
-      } catch { continue; }
-    }
+      }));
+      if (results) return results;
+    } catch { continue; }
   }
   throw new Error(`Yahoo indisponível para ${ticker}`);
+}
+
+async function yahooFundamentals(ticker: string): Promise<Partial<YahooQuoteData>> {
+  const symbols = [`${ticker}.SA`, ticker.toUpperCase()];
+  for (const symbol of symbols) {
+    try {
+      return await Promise.any(YAHOO_HOSTS.map(async (host) => {
+        const url = `https://${host}.finance.yahoo.com/v11/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=financialData,defaultKeyStatistics`;
+        const res = await fetchWithTimeout(url, 5000);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        const result = json?.quoteSummary?.result?.[0];
+        if (!result) throw new Error('Result not found');
+        
+        const fin = result.financialData || {};
+        const stats = result.defaultKeyStatistics || {};
+        
+        return {
+          debtToEquity: fin.debtToEquity?.raw,
+          currentRatio: fin.currentRatio?.raw,
+          returnOnAssets: fin.returnOnAssets?.raw,
+          returnOnEquity: fin.returnOnEquity?.raw,
+          profitMargins: fin.profitMargins?.raw,
+          revenuePerShare: fin.revenuePerShare?.raw,
+        };
+      }));
+    } catch { continue; }
+  }
+  return {};
 }
 
 async function yahooHistorical(ticker: string, period: ChartPeriod): Promise<HistoricalQuote[]> {
   const symbol = `${ticker.toUpperCase()}.SA`;
   const range = period || '1y';
-  for (const host of YAHOO_HOSTS) {
-    try {
+  try {
+    return await Promise.any(YAHOO_HOSTS.map(async (host) => {
       const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d&includePrePost=false`;
       const res = await fetchWithTimeout(url, 8000);
-      if (!res.ok) continue;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       const result = json?.chart?.result?.[0];
-      if (!result?.timestamp) continue;
+      if (!result?.timestamp) throw new Error('No timestamp');
       const quotes = result.indicators?.quote?.[0];
-      if (!quotes) continue;
+      if (!quotes) throw new Error('No quotes');
       return (result.timestamp as number[]).map((ts: number, i: number) => ({
         date: new Date(ts * 1000),
         open: quotes.open?.[i] ?? 0, high: quotes.high?.[i] ?? 0,
         low: quotes.low?.[i] ?? 0, close: quotes.close?.[i] ?? 0,
         volume: quotes.volume?.[i] ?? 0,
       })).filter((q: HistoricalQuote) => q.close > 0);
-    } catch { continue; }
+    }));
+  } catch {
+    throw new Error(`Histórico indisponível para ${ticker}`);
   }
-  throw new Error(`Histórico indisponível para ${ticker}`);
 }
 
 async function yahooDividends(ticker: string, period: ChartPeriod): Promise<Dividend[]> {
   const symbol = `${ticker.toUpperCase()}.SA`;
   const period1 = Math.floor(periodoParaData(period).getTime() / 1000);
   const period2 = Math.floor(Date.now() / 1000);
-  for (const host of YAHOO_HOSTS) {
-    try {
+  try {
+    return await Promise.any(YAHOO_HOSTS.map(async (host) => {
       const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${period2}&interval=1d&events=div`;
       const res = await fetchWithTimeout(url, 8000);
-      if (!res.ok) continue;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       const events = json?.chart?.result?.[0]?.events?.dividends;
       if (!events) return [];
       return Object.values(events).map((d: any) => ({
         date: new Date(d.date * 1000), amount: d.amount,
       })).sort((a: Dividend, b: Dividend) => a.date.getTime() - b.date.getTime());
-    } catch { continue; }
+    }));
+  } catch {
+    throw new Error(`Dividendos indisponíveis para ${ticker}`);
   }
-  throw new Error(`Dividendos indisponíveis para ${ticker}`);
 }
 
 async function yahooSearch(query: string): Promise<any[]> {
@@ -230,6 +266,7 @@ export function inferAssetType(ticker: string): ExtendedAssetType {
   const clean = ticker.trim().replace(RE_SA, '').toUpperCase();
   if (RE_BDR.test(clean)) return 'BDR';
   if (clean.endsWith('11')) return ETFS_CONHECIDOS.has(clean) ? 'ETF' : 'FII';
+  if (clean.endsWith('12')) return 'FII';
   return 'ACAO';
 }
 
@@ -252,11 +289,8 @@ function validarTicker(ticker: string): string | null {
 const _hostnameCache = new Map<string, string>();
 
 function getHeadersConsistentes(userAgent: string, url: string): Record<string, string> {
-  let hostname = _hostnameCache.get(url);
-  if (!hostname) {
-    hostname = new URL(url).hostname;
-    _hostnameCache.set(url, hostname);
-  }
+  const match = url.match(RE_HOSTNAME);
+  const hostname = match ? match[1] : 'www.google.com';
 
   const lang = Math.random() > 0.5
     ? 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
@@ -296,8 +330,8 @@ class LRUCache<K, V> {
   constructor(private readonly tamanhoMax: number) {}
 
   get(chave: K): V | undefined {
-    if (!this.mapa.has(chave)) return undefined;
-    const val = this.mapa.get(chave)!;
+    const val = this.mapa.get(chave);
+    if (val === undefined) return undefined;
     this.mapa.delete(chave);
     this.mapa.set(chave, val);
     return val;
@@ -314,6 +348,7 @@ class LRUCache<K, V> {
 
   delete(chave: K): boolean { return this.mapa.delete(chave); }
   clear(): void { this.mapa.clear(); }
+  get size(): number { return this.mapa.size; }
   get tamanho(): number { return this.mapa.size; }
   has(chave: K): boolean { return this.mapa.has(chave); }
 }
@@ -373,7 +408,7 @@ class CircuitBreaker {
  * Como as regras são derivadas de templates estáticos por tipo de ativo,
  * o resultado pode ser memoizado com a chave do template.
  */
-const _ruleMapCache = new Map<string, Record<string, LabelRule>>();
+const _ruleMapCache = new LRUCache<string, Record<string, LabelRule>>(64);
 
 function buildRuleMap(rules: LabelRule[], aliases: Record<string, string> = {}): Record<string, LabelRule> {
   // Chave de cache: combinação dos nomes das regras + aliases
@@ -494,6 +529,16 @@ export class NexusEngineUltra {
   private static _searchCache = new LRUCache<string, { data: any[]; timestamp: number }>(50);
   private static _cb          = new CircuitBreaker(3, 30_000);
 
+  // ── Métricas de Sessão ──────────────────────────────────────────────────
+  private static _sessionMetrics = {
+    totalRequests: 0,
+    cacheHits: 0,
+    cacheStale: 0,
+    cacheMisses: 0,
+    errors: 0,
+    totalLatencyMs: 0,
+  };
+
   /**
    * OTIMIZAÇÃO: Deduplicação de requests em andamento — requests idênticos
    * concorrentes reutilizam a mesma Promise, evitando fetch duplicado.
@@ -542,13 +587,16 @@ export class NexusEngineUltra {
     const cacheKey = `${cleanTicker}:${type}`;
 
     if (!isRetry) {
+      this._sessionMetrics.totalRequests++;
       const cached = this._cache.get(cacheKey);
       if (cached) {
         const ageMs = Date.now() - cached.timestamp;
         if (ageMs < this._config.cacheStaleMs) {
+          this._sessionMetrics.cacheHits++;
           return this._hydrateData(cached.data, includeNews, cleanTicker, 'HIT');
         }
         if (ageMs < this._config.cacheMaxMs) {
+          this._sessionMetrics.cacheStale++;
           // Revalidação em background sem bloquear o caller
           if (!this._inFlight.has(cacheKey)) {
             const bg = this._doFetchCore(cleanTicker, type, includeNews, cacheKey).catch(() => {});
@@ -562,6 +610,8 @@ export class NexusEngineUltra {
       // Deduplica requests concorrentes para o mesmo ativo
       const inflight = this._inFlight.get(cacheKey);
       if (inflight) return inflight;
+      
+      this._sessionMetrics.cacheMisses++;
     }
 
     const fetchPromise = this._doFetchCore(cleanTicker, type, includeNews, cacheKey, isRetry);
@@ -599,10 +649,11 @@ export class NexusEngineUltra {
     }
 
     const url = `${preset.url_base}/${cleanTicker.toLowerCase()}/`;
+    const startFetch = performance.now();
     try {
       const [result, news] = await Promise.all([
         this._executeFetchParallel(cleanTicker, url, preset, type, log),
-        includeNews ? this.fetchNews(cleanTicker) : Promise.resolve(undefined),
+        includeNews ? this.fetchNews(cleanTicker).catch(() => []) : Promise.resolve(undefined),
       ]);
 
       const finalData: FetchAtivoResult = {
@@ -610,16 +661,21 @@ export class NexusEngineUltra {
         cacheStatus: 'MISS' as const, logs, news,
       };
       this._cache.set(cacheKey, { data: finalData, timestamp: Date.now() });
+      this._sessionMetrics.totalLatencyMs += (performance.now() - startFetch);
       return finalData;
 
     } catch (error) {
+      this._sessionMetrics.errors++;
       const err = error as Error;
       if (!isRetry && (err.message.includes('404') || err.message.includes('410') || err.message.includes('total'))) {
-        const fallbackMap: Record<ExtendedAssetType, ExtendedAssetType | null> = {
-          'ACAO': 'FII', 'FII': 'ACAO', 'BDR': 'ACAO', 'ETF': null,
+        const fallbackMap: Record<ExtendedAssetType, ExtendedAssetType[]> = {
+          'ACAO': ['FII', 'BDR'],
+          'FII': ['ACAO'],
+          'BDR': ['ACAO'],
+          'ETF': [],
         };
-        const fallbackType = fallbackMap[type];
-        if (fallbackType) {
+        const fallbacks = fallbackMap[type] || [];
+        for (const fallbackType of fallbacks) {
           log(`Fallback: ${type} → ${fallbackType}`);
           const fb = await this.fetchAtivo(cleanTicker, fallbackType, true, includeNews);
           if (!('error' in fb)) return { ...fb, logs: [...logs, ...(fb.logs ?? [])] };
@@ -673,8 +729,13 @@ export class NexusEngineUltra {
     })().catch((e: Error) => { log(`I10 falhou: ${e.message}`); this._cb.registrarFalha(cbI10); return null; }) : Promise.resolve(null);
 
     const yahooPromise = !this._cb.estaAberto(cbYF) ? (async () => {
-      log(`Fase 2: Yahoo Finance API v8`);
-      return await yahooQuote(ticker);
+      log(`Fase 2: Yahoo Finance API v8 + v11`);
+      const [quote, fund] = await Promise.all([
+        yahooQuote(ticker).catch(() => null),
+        yahooFundamentals(ticker).catch(() => ({}))
+      ]);
+      if (!quote) return null;
+      return { ...quote, ...fund };
     })().catch((e: Error) => { log(`Yahoo falhou: ${e.message}`); this._cb.registrarFalha(cbYF); return null; }) : Promise.resolve(null);
 
     // #4: Espera ambos (paralelo, não serial)
@@ -695,6 +756,7 @@ export class NexusEngineUltra {
 
     // ── Processar Yahoo (complemento) ────────────────────
     if (yahooResult) {
+      this._cb.registrarSucesso(cbYF); // #P: Sucesso registrado se dados chegaram
       let added = 0;
       const fill = (chave: AssetLabel, val: unknown) => {
         if (finalResults[chave] !== undefined || val == null) return;
@@ -710,13 +772,17 @@ export class NexusEngineUltra {
         if (yahooResult.returnOnEquity != null) fill('ROE', (yahooResult.returnOnEquity * 100).toFixed(2) + '%');
         if (yahooResult.revenuePerShare && yahooResult.regularMarketPrice) fill('PSR', (yahooResult.regularMarketPrice / yahooResult.revenuePerShare).toFixed(2));
         if (yahooResult.trailingAnnualDividendYield != null) fill('Dividend Yield', (yahooResult.trailingAnnualDividendYield * 100).toFixed(2) + '%');
+        
+        // #O: Novos mapeamentos
+        if (yahooResult.debtToEquity != null) fill('Dívida Bruta / Patrimônio', (yahooResult.debtToEquity / 100).toFixed(2));
+        if (yahooResult.returnOnAssets != null) fill('ROA', (yahooResult.returnOnAssets * 100).toFixed(2) + '%');
       } else {
         fill('P/VP', yahooResult.priceToBook); fill('Valor Patrimonial', yahooResult.bookValue); fill('Preço Atual', yahooResult.regularMarketPrice);
         if (typeof yahooResult.regularMarketChangePercent === 'number') fill('Variação (24h)', yahooResult.regularMarketChangePercent.toFixed(2) + '%');
         if (yahooResult.marketCap != null) fill('Valor de Mercado', yahooResult.marketCap);
         if (yahooResult.trailingAnnualDividendYield != null) fill('Dividend Yield', (yahooResult.trailingAnnualDividendYield * 100).toFixed(2) + '%');
       }
-      if (added > 0) { sourcesUsed.add('YahooFinance'); this._cb.registrarSucesso(cbYF); log(`Yahoo: +${added}`); }
+      if (added > 0) { sourcesUsed.add('YahooFinance'); log(`Yahoo: +${added}`); }
     }
 
     // #5: StatusInvest = último recurso (sem delay, sem search prévia)
@@ -768,18 +834,20 @@ export class NexusEngineUltra {
     url: string, template: CustomTemplate, source: ScraperSource, retries: number,
     globalStart: number, log: (m: string) => void, ticker?: string
   ): Promise<FetchSuccess> {
+    let lastErr: Error | null = null;
     for (let i = 0; i < retries; i++) {
       try {
         return await this._executeFetch(url, template, source, globalStart, log, ticker);
       } catch (err) {
-        const msg = (err as Error).message;
-        if (i === retries - 1 || msg.includes('404') || msg.includes('410') || msg.includes('451')) throw err;
+        lastErr = err as Error;
+        const msg = lastErr.message;
+        if (i === retries - 1 || msg.includes('404') || msg.includes('410') || msg.includes('451')) throw lastErr;
         const espera = backoffMs(i);
         log(`Tentativa ${i + 1}/${retries} falhou (${msg}). Aguardando ${Math.round(espera)}ms...`);
         await delay(espera);
       }
     }
-    throw new Error('Retries esgotados');
+    throw lastErr || new Error('Retries esgotados');
   }
 
   // ── Core Scraper ─────────────────────────────────────────────────────────
@@ -900,7 +968,10 @@ export class NexusEngineUltra {
         headers: getHeadersConsistentes(getRandomAgent(), url),
         signal: abortCtrl.signal,
       });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      if (!resp.ok) {
+        log(`[${source}] HTTP ${resp.status} em ${url}`);
+        throw new Error(`HTTP ${resp.status}`);
+      }
 
       /**
        * OTIMIZAÇÃO: Leitura streaming — começa a parsear enquanto o body
@@ -996,21 +1067,24 @@ export class NexusEngineUltra {
       const news: NewsItem[] = [];
       let curr: Partial<NewsItem> | null = null;
       let tag = '';
+      let _pubDateStr = '';
 
       const p = new Parser({
-        onopentag(n) { const t = n.toLowerCase(); if (t === 'item') curr = {}; tag = t; },
+        onopentag(n) { const t = n.toLowerCase(); if (t === 'item') { curr = {}; _pubDateStr = ''; } tag = t; },
         ontext(t) {
           if (!curr) return;
           if (tag === 'title')   curr.title   = (curr.title   || '') + t;
           if (tag === 'link')    curr.link    = (curr.link    || '') + t;
-          if (tag === 'pubdate') {
-            const d = new Date((curr.pubDate?.toString() || '') + t);
-            if (!isNaN(d.getTime())) curr.pubDate = d;
-          }
+          if (tag === 'pubdate') _pubDateStr += t;
           if (tag === 'source')  curr.source  = (curr.source  || '') + t;
         },
         onclosetag(n) {
-          if (n.toLowerCase() === 'item' && curr?.title && curr?.link) {
+          const lower = n.toLowerCase();
+          if (lower === 'pubdate' && curr && _pubDateStr) {
+            const d = new Date(_pubDateStr);
+            if (!isNaN(d.getTime())) curr.pubDate = d;
+          }
+          if (lower === 'item' && curr?.title && curr?.link) {
             news.push(curr as NewsItem);
             curr = null;
           }
@@ -1058,7 +1132,7 @@ export class NexusEngineUltra {
 
   static getDetailedReport() {
     return {
-      engine: 'Nexus Engine Ultra v9.0',
+      engine: 'Nexus Engine Ultra v10.1',
       status: 'Operational',
       capabilities: [
         'SAX Streaming Parsing (Zero-AST)',
@@ -1067,9 +1141,52 @@ export class NexusEngineUltra {
         'Circuit Breaker per Source',
         'LRU Multi-level Caching',
         'Deduplication of In-flight Requests',
-        'Smart Fallback Asset Inference'
+        'Smart Fallback Asset Inference',
+        'Session Metrics Tracking'
       ],
-      metrics: this.getCacheStats()
+      metrics: this.getCacheStats(),
+      session: this.getSessionMetrics()
+    };
+  }
+
+  // ── Novas Funcionalidades ────────────────────────────────────────────────
+
+  static invalidateCache(ticker: string, type?: ExtendedAssetType): void {
+    const clean = ticker.trim().replace(RE_SA, '').toUpperCase();
+    if (type) {
+      this._cache.delete(`${clean}:${type}`);
+    } else {
+      ['ACAO', 'FII', 'BDR', 'ETF'].forEach(t => this._cache.delete(`${clean}:${t}`));
+    }
+  }
+
+  static configurePreset(type: ExtendedAssetType, config: { labels?: AssetLabel[], aliases?: Record<string, AssetLabel> }): void {
+    const preset = NEXUS_PRESETS[type];
+    if (!preset) return;
+    if (config.labels) preset.labels = Array.from(new Set([...preset.labels, ...config.labels]));
+    if (config.aliases) preset.aliases = { ...preset.aliases, ...config.aliases };
+    _ruleMapCache.clear(); // Invalida cache de regras para reconstrução
+  }
+
+  static getSessionMetrics() {
+    const m = this._sessionMetrics;
+    const hitRate = m.totalRequests > 0 ? ((m.cacheHits + m.cacheStale) / m.totalRequests) * 100 : 0;
+    const avgLatency = (m.cacheMisses + m.cacheStale) > 0 ? m.totalLatencyMs / (m.cacheMisses + m.cacheStale) : 0;
+    return {
+      ...m,
+      hitRatePercent: Number(hitRate.toFixed(2)),
+      avgMissLatencyMs: Number(avgLatency.toFixed(2))
+    };
+  }
+
+  static resetSessionMetrics(): void {
+    this._sessionMetrics = {
+      totalRequests: 0,
+      cacheHits: 0,
+      cacheStale: 0,
+      cacheMisses: 0,
+      errors: 0,
+      totalLatencyMs: 0,
     };
   }
 }
