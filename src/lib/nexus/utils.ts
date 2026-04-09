@@ -4,19 +4,6 @@ export const delay = (ms: number, jitter = true): Promise<void> => {
   return new Promise((r) => setTimeout(r, actualMs));
 };
 
-export function normalizeBRNumber(raw: string): string {
-  const hasPercent = raw.includes('%');
-  const clean = raw.trim()
-    .replace(/\s+/g, ' ')
-    .replace('%', '')
-    .replace(/\./g, '')
-    .replace(',', '.');
-  
-  if (!clean || clean === '-' || clean === '0.00' || clean === '0,00%') return '';
-  
-  return hasPercent ? `${clean}%` : clean;
-}
-
 export const AGENTS: readonly string[] = [
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',

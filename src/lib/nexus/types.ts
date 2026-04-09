@@ -1,7 +1,7 @@
 export type AssetType = 'ACAO' | 'FII';
 export type ExtendedAssetType = AssetType | 'BDR' | 'ETF';
 export type CacheStatus = 'HIT' | 'MISS' | 'DEDUPE' | 'ERROR';
-export type DataSource = 'Yahoo Finance API' | 'SAX Scraper (Investidor10)' | 'SAX Scraper (Investidor10) + Yahoo Finance API' | 'Google News RSS';
+export type DataSource = string;
 
 export interface NewsItem {
   title: string;
@@ -15,7 +15,7 @@ export type FiiLabel = 'Dividend Yield' | 'P/VP' | 'Valor Patrimonial' | 'Liquid
 export type EtfLabel = 'Taxa de Administração';
 export type AssetLabel = AcaoLabel | FiiLabel | EtfLabel;
 
-export type ResultMap = Partial<Record<AssetLabel, string>>;
+export type ResultMap = Partial<Record<AssetLabel, string | number>>;
 
 export interface NexusEngineConfig {
   /** TTL do cache principal em ms (padrão: 5 min) */
