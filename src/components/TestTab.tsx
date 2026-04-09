@@ -3,9 +3,11 @@ import { motion } from 'motion/react';
 import { Search, Zap, Terminal, Info, XCircle, CheckCircle2, Globe, Cpu } from 'lucide-react';
 import { cn } from '../lib/utils';
 
+import { ExtendedAssetType } from '../lib/nexus/types.js';
+
 export function TestTab() {
-  const [tickers, setTickers] = useState('PETR4, VALE3, MXRF11');
-  const [type, setType] = useState<'ACAO' | 'FII'>('ACAO');
+  const [tickers, setTickers] = useState('PETR4, VALE3, MXRF11, AAPL34, IVVB11');
+  const [type, setType] = useState<ExtendedAssetType>('ACAO');
   const [includeNews, setIncludeNews] = useState(false);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
@@ -135,19 +137,19 @@ export function TestTab() {
 
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Tipo de Ativo</label>
-              <div className="flex gap-3 p-1.5 bg-slate-950/80 border border-slate-800 rounded-2xl">
-                {['ACAO', 'FII'].map((t) => (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-1.5 bg-slate-950/80 border border-slate-800 rounded-2xl">
+                {['ACAO', 'FII', 'BDR', 'ETF'].map((t) => (
                   <button
                     key={t}
                     onClick={() => setType(t as any)}
                     className={cn(
-                      "flex-1 py-2.5 rounded-xl text-xs font-bold transition-all duration-300",
+                      "py-2.5 rounded-xl text-[10px] font-bold transition-all duration-300",
                       type === t 
                         ? "bg-blue-600 text-white shadow-lg shadow-blue-900/20" 
                         : "text-slate-500 hover:text-slate-300 hover:bg-slate-900"
                     )}
                   >
-                    {t === 'ACAO' ? 'Ações (Brasil)' : 'FIIs (Imobiliário)'}
+                    {t === 'ACAO' ? 'Ações' : t === 'FII' ? 'FIIs' : t === 'BDR' ? 'BDRs' : 'ETFs'}
                   </button>
                 ))}
               </div>
