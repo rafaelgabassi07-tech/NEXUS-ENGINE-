@@ -5,10 +5,10 @@ import { cn } from '../lib/utils';
 
 export function BenchmarkTab() {
   const benchmarks = [
-    { label: 'Alocação de Memória', legacy: 'DOM Completo', nexus: 'Buffer de Texto', improvement: 'Zero-AST', color: 'emerald' },
+    { label: 'Alocação de Memória', legacy: 'DOM Completo', nexus: 'Buffer de Texto', improvement: 'Zero-AST (O(1))', color: 'emerald' },
     { label: 'Parser HTML', legacy: 'Cheerio/JSDOM', nexus: 'SAX Stream', improvement: 'htmlparser2', color: 'blue' },
-    { label: 'Processamento', legacy: 'Download Total', nexus: 'Early Abort', improvement: 'Interrompe ao achar', color: 'indigo' },
-    { label: 'Concorrência', legacy: 'Sequencial', nexus: 'Promise.race', improvement: 'Lotes de 5', color: 'blue' },
+    { label: 'Processamento', legacy: 'Download Total', nexus: 'Early Abort', improvement: 'Corta ao achar', color: 'indigo' },
+    { label: 'Resiliência', legacy: 'Classes CSS', nexus: 'Radar Heurístico', improvement: 'v2 Semântico', color: 'blue' },
   ];
 
   return (

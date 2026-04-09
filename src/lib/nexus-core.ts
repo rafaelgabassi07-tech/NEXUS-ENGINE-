@@ -84,25 +84,41 @@ function periodoParaData(periodo: ChartPeriod): Date {
 
 function extrairVersaoChrome(ua: string): string { return ua.match(/Chrome\/(\d+)/)?.[1] ?? '124'; }
 
-function getHeadersConsistentes(userAgent: string): Record<string, string> {
+function getHeadersConsistentes(userAgent: string, url: string, ticker?: string): Record<string, string> {
   const v = extrairVersaoChrome(userAgent);
+  const urlObj = new URL(url);
+  const domain = urlObj.hostname;
+  const isStatusInvest = domain.includes('statusinvest');
+  
   const lang = Math.random() > 0.5 ? 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7' : 'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3';
-  return {
+  
+  const headers: Record<string, string> = {
     'User-Agent': userAgent,
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
     'Accept-Language': lang,
     'Accept-Encoding': 'gzip, deflate, br',
     'Cache-Control': 'max-age=0',
+    'Connection': 'keep-alive',
     'Sec-Ch-Ua': `"Not_A Brand";v="8", "Chromium";v="${v}", "Google Chrome";v="${v}"`,
     'Sec-Ch-Ua-Mobile': '?0',
     'Sec-Ch-Ua-Platform': '"Windows"',
     'Sec-Fetch-Dest': 'document',
     'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-Site': isStatusInvest ? 'same-origin' : 'none',
     'Sec-Fetch-User': '?1',
     'Upgrade-Insecure-Requests': '1',
-    'DNT': '1', 
+    'Priority': 'u=0, i',
   };
+
+  if (isStatusInvest) {
+    // StatusInvest is very sensitive to Referer. 
+    // Sometimes it expects the home page or a search page.
+    headers['Referer'] = ticker ? `https://statusinvest.com.br/acoes/${ticker.toLowerCase()}` : 'https://statusinvest.com.br/';
+  } else {
+    headers['Referer'] = `https://${domain}/`;
+  }
+
+  return headers;
 }
 
 function validarResultMap(results: ResultMap): ResultMap {
@@ -173,7 +189,14 @@ const NEXUS_PRESETS: Record<ExtendedAssetType, ExtendedAssetPreset> = {
     url_base: 'https://investidor10.com.br/acoes',
     statusInvest_base: 'https://statusinvest.com.br/acoes',
     labels: ['P/L', 'Dividend Yield', 'P/VP', 'VPA', 'ROE', 'ROIC', 'Margem Líquida', 'Margem Bruta', 'Margem EBIT', 'EV/EBITDA', 'Dívida Líquida / Patrimônio', 'CAGR Receitas 5 Anos', 'LPA', 'PEG Ratio', 'P/EBIT', 'P/Ativo', 'PSR', 'Giro Ativos', 'Dívida Bruta / Patrimônio', 'Preço Atual', 'Variação (24h)', 'Setor', 'Subsetor', 'Segmento'],
-    aliases: { 'dy': 'Dividend Yield', 'p/l': 'P/L', 'p/vp': 'P/VP', 'vpa': 'VPA', 'lpa': 'LPA', 'roe': 'ROE', 'roic': 'ROIC', 'psr': 'PSR', 'p/ativo': 'P/Ativo', 'cotação': 'Preço Atual', 'cotacao': 'Preço Atual', 'variação': 'Variação (24h)', 'variacao': 'Variação (24h)', 'setor de atuação': 'Setor', 'subsetor de atuação': 'Subsetor', 'segmento de atuação': 'Segmento', 'segmento': 'Segmento' },
+    aliases: { 
+      'dy': 'Dividend Yield', 'p/l': 'P/L', 'p/vp': 'P/VP', 'vpa': 'VPA', 'lpa': 'LPA', 'roe': 'ROE', 'roic': 'ROIC', 'psr': 'PSR', 'p/ativo': 'P/Ativo', 
+      'cotação': 'Preço Atual', 'cotacao': 'Preço Atual', 'variação': 'Variação (24h)', 'variacao': 'Variação (24h)', 
+      'setor de atuação': 'Setor', 'subsetor de atuação': 'Subsetor', 'segmento de atuação': 'Segmento', 'segmento': 'Segmento',
+      'div. líquida / patrimônio': 'Dívida Líquida / Patrimônio', 'divida liquida / patrimonio': 'Dívida Líquida / Patrimônio',
+      'margem líquida': 'Margem Líquida', 'margem liquida': 'Margem Líquida', 'margem bruta': 'Margem Bruta', 'margem ebit': 'Margem EBIT',
+      'ev / ebitda': 'EV/EBITDA', 'ev/ebitda': 'EV/EBITDA', 'cagr receitas 5 anos': 'CAGR Receitas 5 Anos', 'peg ratio': 'PEG Ratio'
+    },
     htmlClasses: { investidor10: ['value', 'v-value', '_card-body'], statusInvest: ['value', 'v-align-middle', 'info', 'd-block'], custom: [] }
   },
   FII: {
@@ -322,20 +345,25 @@ export class NexusEngineUltra {
     const cbI10 = `investidor10:${ticker}`;
     if (!this._cb.estaAberto(cbI10)) {
       try {
-        const r1 = await this._executeFetchWithRetry(url, customTemplate, 'investidor10', this._config.maxRetries, startTime, log);
+        const r1 = await this._executeFetchWithRetry(url, customTemplate, 'investidor10', this._config.maxRetries, startTime, log, ticker);
         finalResults = { ...r1.results };
         bytesTotal += r1.metrics.bytesProcessed;
-        if (Object.keys(finalResults).length > 0) { sourcesUsed.add('Investidor10'); this._cb.registrarSucesso(cbI10); }
+        if (Object.keys(finalResults).length > 0) { 
+          sourcesUsed.add('Investidor10'); 
+          this._cb.registrarSucesso(cbI10);
+          log(`Fase 1 concluída: ${Object.keys(finalResults).length} indicadores obtidos.`);
+        }
       } catch (e) { log(`Fase 1 falhou: ${(e as Error).message}`); this._cb.registrarFalha(cbI10); }
     }
 
     if (Object.keys(finalResults).length < preset.labels.length && preset.statusInvest_base) {
+      await delay(Math.random() * 1000 + 500); // Delay humano entre fontes
       const cbSI = `statusInvest:${ticker}`;
       if (!this._cb.estaAberto(cbSI)) {
         const urlSI = `${preset.statusInvest_base}/${ticker.toLowerCase()}/`;
         customTemplate.htmlClasses = preset.htmlClasses['statusInvest'];
         try {
-          const r15 = await this._executeFetchWithRetry(urlSI, customTemplate, 'statusInvest', 1, startTime, log);
+          const r15 = await this._executeFetchWithRetry(urlSI, customTemplate, 'statusInvest', 1, startTime, log, ticker);
           bytesTotal += r15.metrics.bytesProcessed;
           let added = 0;
           for (const [k, v] of Object.entries(r15.results)) {
@@ -391,10 +419,10 @@ export class NexusEngineUltra {
   }
 
   private static async _executeFetchWithRetry(
-    url: string, template: CustomTemplate, source: ScraperSource, retries: number, globalStart: number, log: (m: string) => void
+    url: string, template: CustomTemplate, source: ScraperSource, retries: number, globalStart: number, log: (m: string) => void, ticker?: string
   ): Promise<FetchSuccess> {
     for (let i = 0; i < retries; i++) {
-      try { return await this._executeFetch(url, template, source, globalStart, log); } 
+      try { return await this._executeFetch(url, template, source, globalStart, log, ticker); } 
       catch (err) {
         const msg = (err as Error).message;
         if (i === retries - 1 || msg.includes('404') || msg.includes('410') || msg.includes('451')) throw err;
@@ -404,7 +432,7 @@ export class NexusEngineUltra {
     throw new Error('Retries esgotados');
   }
   private static async _executeFetch(
-    url: string, template: CustomTemplate, source: ScraperSource, globalStart: number, log: (m: string) => void
+    url: string, template: CustomTemplate, source: ScraperSource, globalStart: number, log: (m: string) => void, ticker?: string
   ): Promise<FetchSuccess> {
     const { rules, aliases = {}, htmlClasses = [] } = template;
     
@@ -540,7 +568,9 @@ export class NexusEngineUltra {
     }, { decodeEntities: true });
 
     try {
-      const response = await fetch(url, { headers: getHeadersConsistentes(getRandomAgent()), signal: abortCtrl.signal });
+      const response = await fetch(url, { headers: getHeadersConsistentes(getRandomAgent(), url, ticker), signal: abortCtrl.signal });
+      if (response.status === 403) throw new Error('HTTP 403 (Acesso Negado/WAF)');
+      if (response.status === 410 || response.status === 404) throw new Error(`HTTP ${response.status} (Ativo não encontrado nesta categoria)`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       if (response.body) {
         const reader = response.body.getReader();

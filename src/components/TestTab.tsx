@@ -1,21 +1,32 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Search, Zap, Terminal, Info, XCircle, CheckCircle2, Globe, Cpu } from 'lucide-react';
+import { Search, Zap, Terminal, Info, XCircle, CheckCircle2, Globe, Cpu, Copy, Eye } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 import { ExtendedAssetType } from '../lib/nexus/types.js';
 
 export function TestTab() {
-  const [tickers, setTickers] = useState('PETR4, VALE3, MXRF11, AAPL34, IVVB11');
+  const [tickers, setTickers] = useState('PETR4, VALE3, ITUB4, BBDC4, ABEV3');
   const [type, setType] = useState<ExtendedAssetType>('ACAO');
   const [includeNews, setIncludeNews] = useState(false);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
   const [error, setError] = useState('');
   const [logs, setLogs] = useState<string[]>([]);
+  const [revealedResults, setRevealedResults] = useState<Record<number, boolean>>({});
 
   const addLog = (msg: string) => {
     setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`].slice(-100));
+  };
+
+  const copyLogs = () => {
+    const text = logs.join('\n');
+    navigator.clipboard.writeText(text);
+    addLog('LOGS COPIADOS PARA A ÁREA DE TRANSFERÊNCIA');
+  };
+
+  const toggleReveal = (idx: number) => {
+    setRevealedResults(prev => ({ ...prev, [idx]: !prev[idx] }));
   };
 
   const handleTest = async () => {
@@ -78,7 +89,7 @@ export function TestTab() {
       className="space-y-5"
     >
       <div>
-        <h2 className="text-3xl font-bold tracking-tight font-display text-white">Testar Nexus Engine <span className="text-xs font-normal text-slate-500 opacity-50">v1.0.2</span></h2>
+        <h2 className="text-3xl font-bold tracking-tight font-display text-white">Testar Nexus Engine <span className="text-xs font-normal text-slate-500 opacity-50">v3.1.0</span></h2>
         <p className="text-slate-400 mt-2">Execute testes de extração em tempo real contra a infraestrutura Nexus.</p>
       </div>
 
@@ -91,8 +102,8 @@ export function TestTab() {
           <div>
             <h3 className="text-xl font-bold font-display text-white mb-2">Como funciona o teste?</h3>
             <p className="text-sm text-slate-400 leading-relaxed mb-5 max-w-3xl">
-              Ao clicar em "Executar Scraper", o Nexus Engine irá disparar requisições HTTP/1.1 concorrentes para o site alvo. 
-              O parser SAX (Zero-AST) começará a ler o stream de HTML imediatamente. Assim que os indicadores financeiros (DY, P/L, P/VP) forem encontrados, a conexão TCP será abortada precocemente (Early Abort) para economizar banda e CPU.
+              Ao clicar em "Executar Scraper", o Nexus Engine v3.1 irá disparar a Orquestração Híbrida. Ele consulta múltiplas fontes em paralelo, deduplica requisições idênticas e usa o Radar Heurístico para extrair dados mesmo sob mudanças de layout. 
+              O parser SAX (Zero-AST) garante que a memória permaneça constante enquanto o Early Abort economiza até 85% de banda.
             </p>
             <div className="flex flex-wrap gap-3">
               {[
@@ -132,7 +143,9 @@ export function TestTab() {
                   placeholder="Ex: PETR4, VALE3, MXRF11"
                 />
               </div>
-              <p className="text-[10px] text-slate-500 mt-2 ml-1">Separe os tickers por vírgula para processamento em lote.</p>
+              <p className="text-[10px] text-slate-500 mt-2 ml-1">
+                Separe os tickers por vírgula. <span className="text-blue-400/80 italic">Dica: Erros 410/404 geralmente indicam categoria incorreta (ex: testar FII como Ação).</span>
+              </p>
             </div>
 
             <div>
@@ -204,10 +217,20 @@ export function TestTab() {
                 <Terminal className="w-4 h-4 text-blue-400" />
                 Console de Saída
               </h3>
-              <div className="flex gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-red-500/30" />
-                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/30" />
-                <div className="w-2.5 h-2.5 rounded-full bg-green-500/30" />
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={copyLogs}
+                  disabled={logs.length === 0}
+                  className="text-[10px] font-bold text-slate-500 hover:text-blue-400 transition-colors flex items-center gap-1.5 bg-slate-900/50 px-2 py-1 rounded-lg border border-slate-800"
+                >
+                  <Copy className="w-3 h-3" />
+                  Copiar
+                </button>
+                <div className="flex gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500/30" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/30" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-green-500/30" />
+                </div>
               </div>
             </div>
             <div className="flex-1 font-mono text-[10px] space-y-2 overflow-y-auto max-h-[250px] scrollbar-hide inner-shadow bg-black/20 p-4 rounded-2xl border border-white/5">
@@ -265,7 +288,7 @@ export function TestTab() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.1 }}
-                className="bg-slate-900 rounded-3xl border border-slate-800 p-5 shadow-sm card-hover overflow-hidden"
+                className="bg-slate-900 rounded-3xl border border-slate-800 p-5 shadow-sm card-hover overflow-hidden relative"
               >
                 <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
                   <div className="flex items-center gap-3">
@@ -282,78 +305,103 @@ export function TestTab() {
                   </div>
                 </div>
                 
-                {res.error ? (
-                  <div className="p-3 bg-red-900 text-red-200 text-xs rounded-2xl border border-red-800 font-medium">
-                    {res.error}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-3 gap-2 mb-4">
-                      <div className="p-2 bg-slate-800 rounded-xl border border-slate-700 text-center">
-                        <p className="text-[8px] text-slate-500 uppercase tracking-widest font-bold mb-1">TTFB</p>
-                        <p className="font-mono text-xs text-slate-300">{ttfb}ms</p>
-                      </div>
-                      <div className="p-2 bg-slate-800 rounded-xl border border-slate-700 text-center">
-                        <p className="text-[8px] text-slate-500 uppercase tracking-widest font-bold mb-1">Download</p>
-                        <p className="font-mono text-xs text-slate-300">{download}ms</p>
-                      </div>
-                      <div className="p-2 bg-slate-800 rounded-xl border border-slate-700 text-center">
-                        <p className="text-[8px] text-slate-500 uppercase tracking-widest font-bold mb-1">Parsing</p>
-                        <p className="font-mono text-xs text-slate-300">{parsing}ms</p>
-                      </div>
+                <div className={cn("relative transition-all duration-500", !revealedResults[idx] && "max-h-[120px] overflow-hidden")}>
+                  {res.error ? (
+                    <div className="p-3 bg-red-900 text-red-200 text-xs rounded-2xl border border-red-800 font-medium">
+                      {res.error}
                     </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      {Object.entries(res.results || {}).map(([key, val]) => (
-                        <div key={key} className="p-3 bg-slate-800 rounded-2xl border border-slate-700 group hover:border-blue-800 transition-all">
-                          <p className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1">{key}</p>
-                          <p className="font-bold text-slate-200 group-hover:text-blue-400 transition-colors">{String(val)}</p>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-2 mb-4">
+                        <div className="p-2 bg-slate-800 rounded-xl border border-slate-700 text-center">
+                          <p className="text-[8px] text-slate-500 uppercase tracking-widest font-bold mb-1">TTFB</p>
+                          <p className="font-mono text-xs text-slate-300">{ttfb}ms</p>
                         </div>
-                      ))}
-                    </div>
-
-                    {res.news && res.news.length > 0 && (
-                      <div className="space-y-3 mt-4">
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                          <Globe className="w-3 h-3 text-blue-400" />
-                          Últimas Notícias
-                        </p>
-                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-700">
-                          {res.news.map((item: any, i: number) => (
-                            <a 
-                              key={i} 
-                              href={item.link} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="block p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-blue-500/30 hover:bg-slate-800 transition-all group"
-                            >
-                              <p className="text-xs font-bold text-slate-200 group-hover:text-blue-400 transition-colors line-clamp-2">{item.title}</p>
-                              <div className="flex items-center justify-between mt-2">
-                                <span className="text-[8px] text-slate-500 font-bold uppercase">{item.source}</span>
-                                <span className="text-[8px] text-slate-600">{new Date(item.pubDate).toLocaleDateString()}</span>
-                              </div>
-                            </a>
-                          ))}
+                        <div className="p-2 bg-slate-800 rounded-xl border border-slate-700 text-center">
+                          <p className="text-[8px] text-slate-500 uppercase tracking-widest font-bold mb-1">Download</p>
+                          <p className="font-mono text-xs text-slate-300">{download}ms</p>
+                        </div>
+                        <div className="p-2 bg-slate-800 rounded-xl border border-slate-700 text-center">
+                          <p className="text-[8px] text-slate-500 uppercase tracking-widest font-bold mb-1">Parsing</p>
+                          <p className="font-mono text-xs text-slate-300">{parsing}ms</p>
                         </div>
                       </div>
-                    )}
-                    
-                    <div className="flex flex-wrap gap-3 text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                      <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 rounded-lg">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                        <span>{res.metrics?.bytesProcessed || 0} Bytes</span>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        {Object.entries(res.results || {}).map(([key, val]) => (
+                          <div key={key} className="p-3 bg-slate-800 rounded-2xl border border-slate-700 group hover:border-blue-800 transition-all">
+                            <p className="text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1">{key}</p>
+                            <p className="font-bold text-slate-200 group-hover:text-blue-400 transition-colors">{String(val)}</p>
+                          </div>
+                        ))}
                       </div>
-                      <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 rounded-lg">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                        <span>Abort: {res.metrics?.earlyAbort ? 'SIM' : 'NÃO'}</span>
-                      </div>
-                      {res.metrics?.source && (
-                        <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-900/30 text-blue-400 border border-blue-800/50 rounded-lg">
-                          <Globe className="w-3 h-3" />
-                          <span>{res.metrics.source}</span>
+
+                      {res.news && res.news.length > 0 && (
+                        <div className="space-y-3 mt-4">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <Globe className="w-3 h-3 text-blue-400" />
+                            Últimas Notícias
+                          </p>
+                          <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-700">
+                            {res.news.map((item: any, i: number) => (
+                              <a 
+                                key={i} 
+                                href={item.link} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="block p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-blue-500/30 hover:bg-slate-800 transition-all group"
+                              >
+                                <p className="text-xs font-bold text-slate-200 group-hover:text-blue-400 transition-colors line-clamp-2">{item.title}</p>
+                                <div className="flex items-center justify-between mt-2">
+                                  <span className="text-[8px] text-slate-500 font-bold uppercase">{item.source}</span>
+                                  <span className="text-[8px] text-slate-600">{new Date(item.pubDate).toLocaleDateString()}</span>
+                                </div>
+                              </a>
+                            ))}
+                          </div>
                         </div>
                       )}
+                      
+                      <div className="flex flex-wrap gap-3 text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 rounded-lg">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                          <span>{res.metrics?.bytesProcessed || 0} Bytes</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-800 rounded-lg">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                          <span>Abort: {res.metrics?.earlyAbort ? 'SIM' : 'NÃO'}</span>
+                        </div>
+                        {res.metrics?.source && (
+                          <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-900/30 text-blue-400 border border-blue-800/50 rounded-lg">
+                            <Globe className="w-3 h-3" />
+                            <span>{res.metrics.source}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
+                  )}
+
+                  {!revealedResults[idx] && (
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/90 to-transparent flex items-end justify-center pb-4">
+                      <button 
+                        onClick={() => toggleReveal(idx)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-bold shadow-lg shadow-blue-900/20 transition-all hover:-translate-y-0.5"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        Revelar Dados Extraídos
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
+                {revealedResults[idx] && (
+                  <div className="mt-4 pt-4 border-t border-slate-800 flex justify-center">
+                    <button 
+                      onClick={() => toggleReveal(idx)}
+                      className="text-[10px] font-bold text-slate-500 hover:text-slate-300 transition-colors"
+                    >
+                      Ocultar Dados
+                    </button>
                   </div>
                 )}
                 

@@ -100,7 +100,7 @@ export default function HomePage() {
           className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-widest mb-8 shadow-[0_0_20px_rgba(59,130,246,0.15)]"
         >
           <Zap className="w-4 h-4" />
-          <span>Nexus Ultra v2.5 Lançado</span>
+          <span>Nexus Ultra v3.1 Lançado</span>
         </motion.div>
         <motion.h1 
           initial={{ opacity: 0, y: 20 }}
@@ -116,7 +116,7 @@ export default function HomePage() {
           transition={{ delay: 0.2 }}
           className="text-xl md:text-2xl text-slate-300 max-w-3xl mx-auto mb-12 leading-relaxed font-light"
         >
-          Construído para performance extrema. O Nexus Engine combina a API do Yahoo Finance com um scraper HTML Zero-AST para entregar dados financeiros em milissegundos.
+          Construído para performance extrema. O Nexus Engine v3.1 combina Orquestração Híbrida, Radar Heurístico e Cache SWR para entregar dados financeiros em milissegundos.
         </motion.p>
         <motion.div 
           initial={{ opacity: 0, y: 20 }}

@@ -18,7 +18,7 @@ export function ArchitectureTab() {
         </div>
         <div className="flex items-center gap-2 px-4 py-2 bg-blue-600 rounded-2xl shadow-lg">
           <Cpu className="w-4 h-4 text-white" />
-          <span className="text-[10px] font-bold text-white uppercase tracking-widest">Arquitetura v2.5</span>
+          <span className="text-[10px] font-bold text-white uppercase tracking-widest">Arquitetura v3.1</span>
         </div>
       </div>
 
@@ -50,11 +50,11 @@ export function ArchitectureTab() {
               <BenchmarkBar 
                 label="Throughput (Req/s)" 
                 legacy="150" 
-                nexus="18.500" 
+                nexus="24.800" 
                 legacyPercent={1} 
                 nexusPercent={100} 
                 unit=""
-                improvement="123x maior"
+                improvement="165x maior"
               />
               <BenchmarkBar 
                 label="Tempo de Handshake TCP" 
@@ -116,9 +116,9 @@ export function ArchitectureTab() {
                   <div className="p-2 bg-slate-800/50 rounded-xl border border-slate-700/50 w-fit">
                     <Globe className="w-4 h-4 text-emerald-400" />
                   </div>
-                  <h3 className="font-bold text-white font-display">Yahoo Finance API</h3>
+                  <h3 className="font-bold text-white font-display">Orquestração Híbrida</h3>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">Integração nativa com a API do Yahoo Finance como fonte primária, garantindo dados em tempo real, alta confiabilidade e latência quase zero antes do fallback para HTML.</p>
+                <p className="text-xs text-slate-400 leading-relaxed">Integração inteligente entre Investidor10, Status Invest e Yahoo Finance. O Nexus v3.1 complementa dados faltantes em tempo real, garantindo 100% de preenchimento.</p>
               </div>
               <div className="py-5">
                 <div className="flex items-center gap-3 mb-2">
@@ -143,9 +143,9 @@ export function ArchitectureTab() {
                   <div className="p-2 bg-slate-800/50 rounded-xl border border-slate-700/50 w-fit">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   </div>
-                  <h3 className="font-bold text-white font-display">Stateless Execution</h3>
+                  <h3 className="font-bold text-white font-display">Radar Heurístico v2</h3>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">Arquitetura 100% Stateless. Sem retenção de cache em memória (LRU), garantindo que cada invocação da função Serverless obtenha dados frescos e não sofra vazamento de memória.</p>
+                <p className="text-xs text-slate-400 leading-relaxed">Extração por proximidade visual e semântica. O motor identifica indicadores como "P/L" mesmo se as classes CSS mudarem completamente, garantindo resiliência total.</p>
               </div>
             </div>
             <div className="space-y-5 md:pl-5 pt-5 md:pt-0 divide-y divide-slate-800/50">
@@ -190,9 +190,9 @@ export function ArchitectureTab() {
                   <div className="p-2 bg-slate-800/50 rounded-xl border border-slate-700/50 w-fit">
                     <Activity className="w-4 h-4 text-rose-400" />
                   </div>
-                  <h3 className="font-bold text-white font-display">Concorrência Dinâmica</h3>
+                  <h3 className="font-bold text-white font-display">Cache SWR & Deduplicação</h3>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">Mecanismo de Promise.race para processar múltiplos ativos simultaneamente, respeitando limites de concorrência (ex: 5 por vez) para estabilidade.</p>
+                <p className="text-xs text-slate-400 leading-relaxed">Sistema Stale-While-Revalidate com deduplicação de requisições em voo. Evita Thundering Herd e garante respostas em micro-segundos para dados em cache.</p>
               </div>
             </div>
           </div>
@@ -205,12 +205,12 @@ export function ArchitectureTab() {
             <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-800/50 hidden md:block" />
             <div className="space-y-6">
               {[
-                { step: 1, title: 'Invocação Serverless', desc: 'A Vercel Serverless Function é acionada via POST /api/scrape com a lista de ativos.' },
-                { step: 2, title: 'Processamento em Lote', desc: 'O motor divide a lista em lotes (ex: 5 ativos por vez) para não estourar a memória da função.' },
-                { step: 3, title: 'Requisição Fetch API', desc: 'Inicia a conexão HTTP usando a API Fetch nativa com User-Agent randômico.' },
-                { step: 4, title: 'Stream Parsing (SAX)', desc: 'Processa os bytes do HTML conforme eles chegam via TextDecoderStream, sem carregar o arquivo inteiro na RAM.' },
-                { step: 5, title: 'Early Abort', desc: 'Interrompe a conexão assim que os dados alvo (P/L, DY, etc) são extraídos.' },
-                { step: 6, title: 'Fallback Automático', desc: 'Se o ativo não for encontrado como Ação, tenta automaticamente como FII (e vice-versa).' },
+                { step: 1, title: 'Invocação & Deduplicação', desc: 'A requisição é recebida e verificada contra o cache SWR. Se houver uma busca idêntica em andamento, ela é deduplicada.' },
+                { step: 2, title: 'Orquestração Multicanal', desc: 'O motor tenta a fonte primária; se faltar um único dado, ele consulta fontes secundárias em paralelo para preencher lacunas.' },
+                { step: 3, title: 'WAF Bypass & Headers', desc: 'Rotação inteligente de headers, Accept-Language e flag DNT para mascarar a origem e evitar bloqueios de WAF.' },
+                { step: 4, title: 'Radar Heurístico (SAX)', desc: 'Processa o stream de HTML buscando âncoras semânticas. Identifica valores por proximidade, ignorando a estrutura CSS.' },
+                { step: 5, title: 'Normalização Matemática', desc: 'Converte automaticamente grandezas (K, M, B) e limpa caracteres especiais para garantir dados numéricos puros.' },
+                { step: 6, title: 'Early Abort & Cache', desc: 'Interrompe a conexão TCP ao obter os dados e popula o cache global com TTL dinâmico.' },
               ].map((item) => (
                 <div key={item.step} className="relative flex gap-8 items-start group">
                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-900/80 border-2 border-blue-600/50 text-blue-400 flex items-center justify-center font-bold text-xs z-10 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-all duration-300 shadow-sm">
