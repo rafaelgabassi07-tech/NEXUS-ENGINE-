@@ -1,6 +1,5 @@
 import { Parser } from 'htmlparser2';
 import { performance } from 'perf_hooks';
-import yahooFinance from 'yahoo-finance2';
 
 import {
   AssetType,
@@ -39,13 +38,12 @@ interface ExtendedAssetPreset extends AssetPreset {
   htmlClasses: Record<ScraperSource, string[]>;
 }
 
-interface YahooQuote {
-  trailingPE?: number | null; priceToBook?: number | null; bookValue?: number | null;
-  epsTrailingTwelveMonths?: number | null; profitMargins?: number | null;
-  returnOnEquity?: number | null; returnOnAssets?: number | null;
-  revenuePerShare?: number | null; regularMarketPrice?: number | null;
-  regularMarketChangePercent?: number | null; marketCap?: number | null;
-  trailingAnnualDividendYield?: number | null; [key: string]: unknown;
+interface YahooQuoteData {
+  regularMarketPrice?: number; regularMarketChangePercent?: number;
+  trailingPE?: number; priceToBook?: number; bookValue?: number;
+  epsTrailingTwelveMonths?: number; trailingAnnualDividendYield?: number;
+  marketCap?: number; profitMargins?: number; returnOnEquity?: number;
+  revenuePerShare?: number;
 }
 
 interface CacheEntry { data: FetchAtivoResult; timestamp: number; }
@@ -67,14 +65,6 @@ const RE_SA       = /\.SA$/i;
 const RE_BDR      = /3[2-5]$/;
 const RE_NUMERO   = /^[\d,.\-]+[%MkKB]?$/;
 const RE_PERCENT  = /%/;
-
-/** CORREÇÃO: Fallback chain movida para constante de módulo (era recriada a cada erro) */
-const FALLBACK_CHAIN: Record<ExtendedAssetType, ExtendedAssetType[]> = {
-  ACAO: ['BDR', 'ETF', 'FII'],
-  FII:  ['ACAO'],
-  BDR:  ['ACAO'],
-  ETF:  ['ACAO'],
-};
 
 /**
  * OTIMIZAÇÃO: Lista de ETFs expandida — a original tinha apenas 10,
@@ -114,17 +104,6 @@ function normalizeBRNumber(raw: string): number | string {
   return isNaN(num) ? raw.trim() : num * multiplicador;
 }
 
-function resolveYahooFinance(mod: any): any {
-  const candidatos = [mod?.default?.default, mod?.default, mod];
-  for (const c of candidatos) if (c && typeof c === 'object' && typeof c.quote === 'function') return c;
-  for (const c of candidatos) {
-    if (typeof c === 'function') {
-      try { const inst = new c(); if (typeof inst.quote === 'function') return inst; } catch {}
-    }
-  }
-  return mod;
-}
-
 /**
  * OTIMIZAÇÃO: Backoff com full jitter — distribui melhor as retentativas
  * sob alta concorrência, evitando thundering herd.
@@ -139,6 +118,104 @@ function periodoParaData(periodo: ChartPeriod): Date {
     '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '5y': 1825, 'max': 10950
   };
   return new Date(Date.now() - (diasPorPeriodo[periodo] ?? 365) * 86_400_000);
+}
+
+// ═══════════════════════════════════════════════════════════
+// YAHOO FINANCE NATIVO (substitui yahoo-finance2)
+// ═══════════════════════════════════════════════════════════
+
+async function fetchWithTimeout(url: string, timeoutMs = 5000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      signal: controller.signal,
+      headers: { 'Accept': 'application/json', 'User-Agent': getRandomAgent() },
+    });
+  } finally { clearTimeout(timer); }
+}
+
+const YAHOO_HOSTS = ['query1', 'query2'];
+
+async function yahooQuote(ticker: string): Promise<YahooQuoteData> {
+  const symbol = `${ticker}.SA`;
+  for (const host of YAHOO_HOSTS) {
+    try {
+      const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d&includePrePost=false`;
+      const res = await fetchWithTimeout(url, 5000);
+      if (!res.ok) continue;
+      const json = await res.json();
+      const meta = json?.chart?.result?.[0]?.meta;
+      if (!meta) continue;
+      return {
+        regularMarketPrice: meta.regularMarketPrice,
+        regularMarketChangePercent: meta.chartPreviousClose
+          ? ((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100
+          : undefined,
+        trailingPE: meta.trailingPE,
+        priceToBook: meta.priceToBook,
+        bookValue: meta.bookValue,
+        epsTrailingTwelveMonths: meta.epsTrailingTwelveMonths,
+        trailingAnnualDividendYield: meta.trailingAnnualDividendYield,
+        marketCap: meta.marketCap,
+      };
+    } catch { continue; }
+  }
+  throw new Error(`Yahoo indisponível para ${ticker}`);
+}
+
+async function yahooHistorical(ticker: string, period: ChartPeriod): Promise<HistoricalQuote[]> {
+  const symbol = `${ticker.toUpperCase()}.SA`;
+  const range = period || '1y';
+  for (const host of YAHOO_HOSTS) {
+    try {
+      const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d&includePrePost=false`;
+      const res = await fetchWithTimeout(url, 8000);
+      if (!res.ok) continue;
+      const json = await res.json();
+      const result = json?.chart?.result?.[0];
+      if (!result?.timestamp) continue;
+      const quotes = result.indicators?.quote?.[0];
+      if (!quotes) continue;
+      return (result.timestamp as number[]).map((ts: number, i: number) => ({
+        date: new Date(ts * 1000),
+        open: quotes.open?.[i] ?? 0, high: quotes.high?.[i] ?? 0,
+        low: quotes.low?.[i] ?? 0, close: quotes.close?.[i] ?? 0,
+        volume: quotes.volume?.[i] ?? 0,
+      })).filter((q: HistoricalQuote) => q.close > 0);
+    } catch { continue; }
+  }
+  throw new Error(`Histórico indisponível para ${ticker}`);
+}
+
+async function yahooDividends(ticker: string, period: ChartPeriod): Promise<Dividend[]> {
+  const symbol = `${ticker.toUpperCase()}.SA`;
+  const period1 = Math.floor(periodoParaData(period).getTime() / 1000);
+  const period2 = Math.floor(Date.now() / 1000);
+  for (const host of YAHOO_HOSTS) {
+    try {
+      const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${period2}&interval=1d&events=div`;
+      const res = await fetchWithTimeout(url, 8000);
+      if (!res.ok) continue;
+      const json = await res.json();
+      const events = json?.chart?.result?.[0]?.events?.dividends;
+      if (!events) return [];
+      return Object.values(events).map((d: any) => ({
+        date: new Date(d.date * 1000), amount: d.amount,
+      })).sort((a: Dividend, b: Dividend) => a.date.getTime() - b.date.getTime());
+    } catch { continue; }
+  }
+  throw new Error(`Dividendos indisponíveis para ${ticker}`);
+}
+
+async function yahooSearch(query: string): Promise<any[]> {
+  try {
+    const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0&listsCount=0`;
+    const res = await fetchWithTimeout(url, 5000);
+    if (!res.ok) return [];
+    const json = await res.json();
+    return (json?.quotes ?? []).filter((q: any) => q.exchange === 'SAO' || q.symbol?.endsWith('.SA'));
+  } catch { return []; }
 }
 
 /**
@@ -310,17 +387,6 @@ function buildRuleMap(rules: LabelRule[], aliases: Record<string, string> = {}):
 
   _ruleMapCache.set(cacheKey, ruleMap);
   return ruleMap;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// INSTÂNCIA YAHOO FINANCE
-// ─────────────────────────────────────────────────────────────────────────────
-
-const yf = resolveYahooFinance(yahooFinance);
-try {
-  if (typeof yf?.setGlobalConfig === 'function') yf.setGlobalConfig({ suppressNotices: ['yahooSurvey'] });
-} catch (e) {
-  console.warn('[NexusEngine] Falha ao configurar YF:', e);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -531,9 +597,8 @@ export class NexusEngineUltra {
 
     const url = `${preset.url_base}/${cleanTicker.toLowerCase()}/`;
     try {
-      // OTIMIZAÇÃO: news e dados principais buscados em paralelo
       const [result, news] = await Promise.all([
-        this._executeFetchWithFallback(cleanTicker, url, preset, type, log),
+        this._executeFetchParallel(cleanTicker, url, preset, type, log),
         includeNews ? this.fetchNews(cleanTicker) : Promise.resolve(undefined),
       ]);
 
@@ -547,9 +612,13 @@ export class NexusEngineUltra {
     } catch (error) {
       const err = error as Error;
       if (!isRetry && (err.message.includes('404') || err.message.includes('410') || err.message.includes('total'))) {
-        for (const targetType of (FALLBACK_CHAIN[type] ?? [])) {
-          log(`Tentando fallback de tipo: ${type} → ${targetType}`);
-          const fb = await this.fetchAtivo(cleanTicker, targetType, true, includeNews);
+        const fallbackMap: Record<ExtendedAssetType, ExtendedAssetType | null> = {
+          'ACAO': 'FII', 'FII': 'ACAO', 'BDR': 'ACAO', 'ETF': null,
+        };
+        const fallbackType = fallbackMap[type];
+        if (fallbackType) {
+          log(`Fallback: ${type} → ${fallbackType}`);
+          const fb = await this.fetchAtivo(cleanTicker, fallbackType, true, includeNews);
           if (!('error' in fb)) return { ...fb, logs: [...logs, ...(fb.logs ?? [])] };
         }
       }
@@ -574,7 +643,7 @@ export class NexusEngineUltra {
    *   - Todas as fases usam Promise.allSettled (sem abort total se uma falha)
    *   - O delay humano do SI foi reduzido e adaptado dinamicamente
    */
-  private static async _executeFetchWithFallback(
+  private static async _executeFetchParallel(
     ticker: string, url: string, preset: ExtendedAssetPreset, type: ExtendedAssetType, log: (m: string) => void
   ): Promise<FetchSuccess> {
     const startTime = performance.now();
@@ -582,97 +651,86 @@ export class NexusEngineUltra {
     const sourcesUsed: Set<string> = new Set();
     let bytesTotal = 0;
 
-    // Template base para I10 (imutável — clone para SI)
-    const templateI10: CustomTemplate = {
+    const customTemplate: CustomTemplate = {
       rules: preset.labels.map(l => ({ name: l, type: 'number' as DataType })),
       aliases: preset.aliases,
-      htmlClasses: preset.htmlClasses['investidor10'],
+      htmlClasses: preset.htmlClasses['investidor10']
     };
-    // ── FASE 1 + FASE 2 em PARALELO ─────────────────────────────────────
 
-    const promiseI10 = !this._cb.estaAberto('investidor10')
-      ? this._executeFetchWithRetry(url, templateI10, 'investidor10', this._config.maxRetries, startTime, log, ticker)
-          .then(r => ({ ok: true as const, r, fonte: 'investidor10' as const }))
-          .catch(e => ({ ok: false as const, e, fonte: 'investidor10' as const }))
-      : Promise.resolve({ ok: false as const, e: new Error('CB aberto'), fonte: 'investidor10' as const });
+    // ── Dispara I10 + Yahoo em PARALELO ──────────────────
+    const cbI10 = `investidor10`;
+    const cbYF = `yahoo`;
 
-    const promiseYahoo = !this._cb.estaAberto('yahoo')
-      ? this._fetchYahoo(ticker, type, log)
-          .then(added => ({ ok: true as const, added }))
-          .catch(e => ({ ok: false as const, e }))
-      : Promise.resolve({ ok: false as const, e: new Error('CB aberto para Yahoo') });
+    const i10Promise = !this._cb.estaAberto(cbI10) ? (async () => {
+      log(`Fase 1: Scraper Investidor10`);
+      return await this._executeFetchWithRetry(url, customTemplate, 'investidor10', this._config.maxRetries, startTime, log, ticker);
+    })().catch((e: Error) => { log(`I10 falhou: ${e.message}`); this._cb.registrarFalha(cbI10); return null; }) : Promise.resolve(null);
 
-    const [resI10, resYahoo] = await Promise.all([promiseI10, promiseYahoo]);
+    const yahooPromise = !this._cb.estaAberto(cbYF) ? (async () => {
+      log(`Fase 2: Yahoo Finance API v8`);
+      return await yahooQuote(ticker);
+    })().catch((e: Error) => { log(`Yahoo falhou: ${e.message}`); this._cb.registrarFalha(cbYF); return null; }) : Promise.resolve(null);
 
-    // Processa resultado I10
-    if (resI10.ok) {
-      finalResults = { ...resI10.r.results };
-      bytesTotal += resI10.r.metrics.bytesProcessed;
-      this._cb.registrarSucesso('investidor10');
-      log(`Fase 1 concluída: ${Object.keys(finalResults).length} indicadores obtidos.`);
-      sourcesUsed.add('Investidor10');
-    } else {
-      log(`Fase 1 falhou: ${((resI10 as any).e as Error).message}`);
-      this._cb.registrarFalha('investidor10');
+    // #4: Espera ambos (paralelo, não serial)
+    const [i10Result, yahooResult] = await Promise.all([i10Promise, yahooPromise]);
+
+    // ── Processar I10 ────────────────────────────────────
+    if (i10Result) {
+      finalResults = { ...i10Result.results };
+      bytesTotal += i10Result.metrics.bytesProcessed;
+      if (Object.keys(finalResults).length > 0) {
+        sourcesUsed.add('Investidor10');
+        this._cb.registrarSucesso(cbI10);
+        log(`I10: ${Object.keys(finalResults).length} indicadores`);
+      }
     }
 
-    // ── FASE 1.5: StatusInvest (se dados incompletos) ─────────────────────
-
-    const totalLabels = preset.labels.length;
-    const faltam = totalLabels - Object.keys(finalResults).length;
-
-    if (faltam > 0 && preset.statusInvest_base && !this._cb.estaAberto('statusInvest')) {
-      // OTIMIZAÇÃO: delay adaptativo — reduzido se Yahoo já retornou
-      // (menos suspeito para WAF porque a requisição "chega depois" de outra)
-      const delayBase = resYahoo.ok ? 800 : 1200;
-      await delay(delayBase + Math.random() * 1_000);
-
-      // CORREÇÃO: clone do template para evitar mutação do objeto compartilhado
-      const templateSI: CustomTemplate = {
-        ...templateI10,
-        htmlClasses: preset.htmlClasses['statusInvest'],
+    // ── Processar Yahoo (complemento) ────────────────────
+    if (yahooResult) {
+      let added = 0;
+      const fill = (chave: AssetLabel, val: unknown) => {
+        if (finalResults[chave] !== undefined || val == null) return;
+        const str = typeof val === 'number' ? val.toFixed(2) : String(val).trim();
+        if (!VALORES_INVALIDOS.has(str)) { finalResults[chave] = str; added++; }
       };
 
-      const urlSI = `${preset.statusInvest_base}/${ticker.toLowerCase()}/`;
-      try {
-        const r15 = await this._executeFetchWithRetry(urlSI, templateSI, 'statusInvest', 1, startTime, log, ticker);
-        bytesTotal += r15.metrics.bytesProcessed;
-        let added = 0;
-        for (const [k, v] of Object.entries(r15.results)) {
-          if (finalResults[k as AssetLabel] === undefined) {
-            finalResults[k as AssetLabel] = v;
-            added++;
-          }
-        }
-        if (added > 0) {
-          sourcesUsed.add('StatusInvest');
-          this._cb.registrarSucesso('statusInvest');
-          log(`Fase 1.5 concluída: ${added} novos indicadores via StatusInvest.`);
-        }
-      } catch (e) {
-        log(`Fase 1.5 falhou: ${(e as Error).message}`);
-        this._cb.registrarFalha('statusInvest');
+      if (type === 'ACAO' || type === 'BDR') {
+        fill('P/L', yahooResult.trailingPE); fill('P/VP', yahooResult.priceToBook); fill('VPA', yahooResult.bookValue);
+        fill('LPA', yahooResult.epsTrailingTwelveMonths); fill('Preço Atual', yahooResult.regularMarketPrice);
+        if (typeof yahooResult.regularMarketChangePercent === 'number') fill('Variação (24h)', yahooResult.regularMarketChangePercent.toFixed(2) + '%');
+        if (yahooResult.profitMargins != null) fill('Margem Líquida', (yahooResult.profitMargins * 100).toFixed(2) + '%');
+        if (yahooResult.returnOnEquity != null) fill('ROE', (yahooResult.returnOnEquity * 100).toFixed(2) + '%');
+        if (yahooResult.revenuePerShare && yahooResult.regularMarketPrice) fill('PSR', (yahooResult.regularMarketPrice / yahooResult.revenuePerShare).toFixed(2));
+        if (yahooResult.trailingAnnualDividendYield != null) fill('Dividend Yield', (yahooResult.trailingAnnualDividendYield * 100).toFixed(2) + '%');
+      } else {
+        fill('P/VP', yahooResult.priceToBook); fill('Valor Patrimonial', yahooResult.bookValue); fill('Preço Atual', yahooResult.regularMarketPrice);
+        if (typeof yahooResult.regularMarketChangePercent === 'number') fill('Variação (24h)', yahooResult.regularMarketChangePercent.toFixed(2) + '%');
+        if (yahooResult.marketCap != null) fill('Valor de Mercado', yahooResult.marketCap);
+        if (yahooResult.trailingAnnualDividendYield != null) fill('Dividend Yield', (yahooResult.trailingAnnualDividendYield * 100).toFixed(2) + '%');
       }
+      if (added > 0) { sourcesUsed.add('YahooFinance'); this._cb.registrarSucesso(cbYF); log(`Yahoo: +${added}`); }
     }
 
-    // Aplica dados do Yahoo Finance (já buscados em paralelo)
-    if (resYahoo.ok) {
-      const { yResults, count } = resYahoo.added;
-      let addedFromYahoo = 0;
-      for (const [k, v] of Object.entries(yResults)) {
-        if (finalResults[k as AssetLabel] === undefined) {
-          finalResults[k as AssetLabel] = v;
-          addedFromYahoo++;
+    // #5: StatusInvest = último recurso (sem delay, sem search prévia)
+    if (Object.keys(finalResults).length < 3 && !i10Result && preset.statusInvest_base) {
+      const cbSI = `statusInvest`;
+      if (!this._cb.estaAberto(cbSI)) {
+        log(`Fallback StatusInvest`);
+        try {
+          const urlSI = `${preset.statusInvest_base}/${ticker.toLowerCase()}/`;
+          customTemplate.htmlClasses = preset.htmlClasses['statusInvest'];
+          const r15 = await this._executeFetchWithRetry(urlSI, customTemplate, 'statusInvest', 1, startTime, log, ticker);
+          bytesTotal += r15.metrics.bytesProcessed;
+          let siAdded = 0;
+          for (const [k, v] of Object.entries(r15.results)) {
+            if (finalResults[k as AssetLabel] === undefined) { finalResults[k as AssetLabel] = v; siAdded++; }
+          }
+          if (siAdded > 0) { sourcesUsed.add('StatusInvest'); this._cb.registrarSucesso(cbSI); }
+        } catch (e) {
+          log(`StatusInvest falhou: ${(e as Error).message}`);
+          this._cb.registrarFalha(cbSI);
         }
       }
-      if (addedFromYahoo > 0 || count > 0) {
-        sourcesUsed.add('YahooFinance');
-        this._cb.registrarSucesso('yahoo');
-        log(`Fase 2 concluída: ${addedFromYahoo} indicadores complementados via Yahoo Finance.`);
-      }
-    } else {
-      log(`Fase 2 falhou: ${((resYahoo as any).e as Error).message}`);
-      this._cb.registrarFalha('yahoo');
     }
 
     const validatedResults = validarResultMap(finalResults);
@@ -682,63 +740,12 @@ export class NexusEngineUltra {
     return {
       results: validatedResults,
       metrics: {
-        totalTimeMs:  performance.now() - startTime,
-        bytesProcessed: bytesTotal,
-        foundKeys,
-        earlyAbort:   foundKeys.length >= totalLabels,
-        successRate:  foundKeys.length / totalLabels,
-        source:       Array.from(sourcesUsed).join(' + ') as DataSource,
+        totalTimeMs: performance.now() - startTime, bytesProcessed: bytesTotal,
+        foundKeys, earlyAbort: foundKeys.length >= preset.labels.length,
+        successRate: foundKeys.length / preset.labels.length,
+        source: Array.from(sourcesUsed).join(' + ') as DataSource,
       },
     };
-  }
-
-  /**
-   * OTIMIZAÇÃO: Yahoo Finance extraído para método próprio.
-   * Retorna um ResultMap parcial para ser mesclado pelo orquestrador.
-   * Isso permite que seja chamado em paralelo com o scraping.
-   */
-  private static async _fetchYahoo(
-    ticker: string, type: ExtendedAssetType, log: (m: string) => void
-  ): Promise<{ yResults: ResultMap; count: number }> {
-    const quote: YahooQuote = await yf.quote(`${ticker}.SA`);
-    const yResults: ResultMap = {};
-    let count = 0;
-
-    const fill = (chave: AssetLabel, val: unknown) => {
-      if (val == null) return;
-      const str = typeof val === 'number' ? val.toFixed(2) : String(val).trim();
-      if (!VALORES_INVALIDOS.has(str)) { yResults[chave] = str; count++; }
-    };
-
-    if (type === 'ACAO' || type === 'BDR') {
-      fill('P/L',           quote.trailingPE);
-      fill('P/VP',          quote.priceToBook);
-      fill('VPA',           quote.bookValue);
-      fill('LPA',           quote.epsTrailingTwelveMonths);
-      fill('Preço Atual',   quote.regularMarketPrice);
-      if (typeof quote.regularMarketChangePercent === 'number')
-        fill('Variação (24h)', quote.regularMarketChangePercent.toFixed(2) + '%');
-      if (quote.profitMargins != null)
-        fill('Margem Líquida', (quote.profitMargins * 100).toFixed(2) + '%');
-      if (quote.returnOnEquity != null)
-        fill('ROE', (quote.returnOnEquity * 100).toFixed(2) + '%');
-      if (quote.revenuePerShare && quote.regularMarketPrice)
-        fill('PSR', (quote.regularMarketPrice / quote.revenuePerShare).toFixed(2));
-      if (quote.trailingAnnualDividendYield != null)
-        fill('Dividend Yield', (quote.trailingAnnualDividendYield * 100).toFixed(2) + '%');
-    } else {
-      fill('P/VP',               quote.priceToBook);
-      fill('Valor Patrimonial',  quote.bookValue);
-      fill('Preço Atual',        quote.regularMarketPrice);
-      if (typeof quote.regularMarketChangePercent === 'number')
-        fill('Variação (24h)', quote.regularMarketChangePercent.toFixed(2) + '%');
-      if (quote.marketCap != null)
-        fill('Valor de Mercado', quote.marketCap);
-      if (quote.trailingAnnualDividendYield != null)
-        fill('Dividend Yield', (quote.trailingAnnualDividendYield * 100).toFixed(2) + '%');
-    }
-
-    return { yResults, count };
   }
 
   // ── Executor com retry ───────────────────────────────────────────────────
@@ -769,6 +776,8 @@ export class NexusEngineUltra {
    * 2. AbortController conectado ao watchdogMs (estava configurado mas NUNCA usado)
    * 3. Deduplicação de URL: requests ao mesmo URL são compartilhados via _urlInFlight
    * 4. CORREÇÃO: try-catch sem tratamento removido (re-throw automático)
+   * 5. Early abort mata stream HTTP imediatamente
+   * 6. Parser cleanup no finally (zero memory leak)
    */
   private static async _executeFetch(
     url: string, template: CustomTemplate, source: ScraperSource,
@@ -794,7 +803,9 @@ export class NexusEngineUltra {
 
     // CORREÇÃO: watchdogMs agora é de fato aplicado via AbortController timeout
     const abortCtrl = new AbortController();
-    const watchdog = setTimeout(() => abortCtrl.abort(new Error(`Timeout após ${this._config.watchdogMs}ms`)), this._config.watchdogMs);
+    let watchdogId: NodeJS.Timeout;
+    const resetWatchdog = () => { clearTimeout(watchdogId); watchdogId = setTimeout(() => abortCtrl.abort(), this._config.watchdogMs); };
+    resetWatchdog();
 
     const results: ResultMap = {};
     let foundCount = 0;
@@ -856,7 +867,12 @@ export class NexusEngineUltra {
           depth--;
           if (depth === 0 && lastRule) {
             const normalized = normalizeBRNumber(buffer.trim());
-            if (normalized) { results[lastRule.name] = normalized; foundCount++; }
+            if (normalized) { 
+              results[lastRule.name] = normalized; 
+              foundCount++; 
+              // #9: Early abort — mata stream imediatamente
+              if (foundCount >= rules.length) abortCtrl.abort();
+            }
             lastRule = null;
             buffer = '';
           }
@@ -878,16 +894,25 @@ export class NexusEngineUltra {
       if (resp.body) {
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          bytesProcessed += chunk.length;
-          parser.write(chunk);
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) {
+              resetWatchdog();
+              const chunk = decoder.decode(value, { stream: true });
+              bytesProcessed += chunk.length;
+              parser.write(chunk);
+            }
+          }
+          // Flush final do decoder
+          const tail = decoder.decode();
+          if (tail) { bytesProcessed += tail.length; parser.write(tail); }
+        } finally {
+          // #8: Cleanup garantido
+          if (abortCtrl.signal.aborted) reader.cancel().catch(()=>{});
+          reader.releaseLock();
         }
-        // Flush final do decoder
-        const tail = decoder.decode();
-        if (tail) { bytesProcessed += tail.length; parser.write(tail); }
       } else {
         // Fallback para ambientes sem ReadableStream
         const body = await resp.text();
@@ -896,8 +921,13 @@ export class NexusEngineUltra {
       }
       parser.end();
 
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') throw err;
     } finally {
-      clearTimeout(watchdog);
+      clearTimeout(watchdogId!);
+      // #8: Limpa referências para GC
+      depth = 0; buffer = ''; lastRule = null;
+      radarAguardando = null;
     }
 
     return {
@@ -916,23 +946,11 @@ export class NexusEngineUltra {
   // ── Histórico e dividendos ───────────────────────────────────────────────
 
   static async fetchHistoricoGrafico(ticker: string, period: ChartPeriod = '1y'): Promise<HistoricalQuote[]> {
-    try {
-      return (await yf.historical(`${ticker.toUpperCase()}.SA`, {
-        period1: periodoParaData(period), period2: new Date(), interval: '1d',
-      })).map((r: any) => ({ ...r, date: new Date(r.date) }));
-    } catch (e) {
-      throw new Error(`Histórico falhou: ${(e as Error).message}`);
-    }
+    return yahooHistorical(ticker, period);
   }
 
   static async fetchDividends(ticker: string, period: ChartPeriod = '5y'): Promise<Dividend[]> {
-    try {
-      return (await yf.dividends(`${ticker.toUpperCase()}.SA`, {
-        period1: periodoParaData(period), period2: new Date(),
-      })).map((r: any) => ({ date: new Date(r.date), amount: r.dividend }));
-    } catch (e) {
-      throw new Error(`Dividendos falhou: ${(e as Error).message}`);
-    }
+    return yahooDividends(ticker, period);
   }
   // ── Search ───────────────────────────────────────────────────────────────
 
@@ -940,13 +958,9 @@ export class NexusEngineUltra {
     const c = query.trim().toLowerCase();
     const cached = this._searchCache.get(c);
     if (cached && Date.now() - cached.timestamp < this._config.searchCacheTtlMs) return cached.data;
-    try {
-      const r = (await yf.search(query))?.quotes?.filter(
-        (q: any) => q.exchange === 'SAO' || q.symbol?.endsWith('.SA')
-      ) ?? [];
-      this._searchCache.set(c, { data: r, timestamp: Date.now() });
-      return r;
-    } catch (e) { return []; }
+    const data = await yahooSearch(query);
+    this._searchCache.set(c, { data, timestamp: Date.now() });
+    return data;
   }
 
   // ── Notícias ─────────────────────────────────────────────────────────────

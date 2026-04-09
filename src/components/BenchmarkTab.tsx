@@ -38,7 +38,12 @@ export function BenchmarkTab() {
     try {
       await fetch('/api/clear-cache', { method: 'POST' });
       
-      const allTickers = ['PETR4', 'VALE3', 'ITUB4', 'BBDC4', 'ABEV3', 'WEGE3', 'BBAS3', 'JBSS3', 'SUZB3', 'RENT3'];
+      const allTickers = [
+        'PETR4', 'VALE3', 'ITUB4', 'BBDC4', 'ABEV3', 
+        'WEGE3', 'BBAS3', 'JBSS3', 'SUZB3', 'RENT3',
+        'B3SA3', 'ELET3', 'RADL3', 'EQTL3', 'LREN3',
+        'PRIO3', 'HAPV3', 'RAIL3', 'SBSP3', 'VIVT3'
+      ];
       const tickers = allTickers.slice(0, testSize);
       
       const res = await fetch('/api/scrape', {
@@ -83,7 +88,12 @@ export function BenchmarkTab() {
     setRaceResults(null);
     setError(null);
     try {
-      const allTickers = ['PETR4', 'VALE3', 'ITUB4', 'BBDC4', 'ABEV3'];
+      const allTickers = [
+        'PETR4', 'VALE3', 'ITUB4', 'BBDC4', 'ABEV3', 
+        'WEGE3', 'BBAS3', 'JBSS3', 'SUZB3', 'RENT3',
+        'B3SA3', 'ELET3', 'RADL3', 'EQTL3', 'LREN3',
+        'PRIO3', 'HAPV3', 'RAIL3', 'SBSP3', 'VIVT3'
+      ];
       const tickers = allTickers.slice(0, testSize);
       
       const res = await fetch('/api/benchmark-compare', {

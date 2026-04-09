@@ -41,16 +41,6 @@ async function startServer() {
     }
   });
 
-  app.use("/api/*", (req, res) => {
-    console.warn(`[API 404] Route not found: ${req.method} ${req.originalUrl}`);
-    res.status(404).json({ 
-      error: "API Route not found", 
-      method: req.method, 
-      url: req.originalUrl,
-      availableRoutes: ["GET /api/health", "POST /api/scrape", "POST /api/clear-cache"]
-    });
-  });
-
   app.post("/api/clear-cache", (req, res) => {
     NexusEngineUltra.clearCache();
     res.json({ success: true });
@@ -90,6 +80,16 @@ async function startServer() {
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
+  });
+
+  app.use("/api/*", (req, res) => {
+    console.warn(`[API 404] Route not found: ${req.method} ${req.originalUrl}`);
+    res.status(404).json({ 
+      error: "API Route not found", 
+      method: req.method, 
+      url: req.originalUrl,
+      availableRoutes: ["GET /api/health", "POST /api/scrape", "POST /api/clear-cache", "GET /api/stats", "POST /api/benchmark-compare"]
+    });
   });
 
   if (process.env.NODE_ENV !== "production") {

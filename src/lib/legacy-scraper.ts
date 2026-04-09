@@ -41,7 +41,7 @@ export async function runLegacyScraper(tickers: string[]): Promise<FetchAtivoRes
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml'
         },
-        signal: AbortSignal.timeout(8000)
+        signal: AbortSignal.timeout(15000)
       });
       
       if (!resI10.ok) throw new Error(`I10 HTTP ${resI10.status}`);
@@ -72,7 +72,7 @@ export async function runLegacyScraper(tickers: string[]): Promise<FetchAtivoRes
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml'
           },
-          signal: AbortSignal.timeout(8000)
+          signal: AbortSignal.timeout(15000)
         });
         
         if (!resSI.ok) throw new Error(`SI HTTP ${resSI.status}`);
