@@ -93,55 +93,55 @@ export default function HomePage() {
       </div>
 
       {/* Hero Section */}
-      <section className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 pt-20 pb-32 text-center relative z-10">
+      <section className="w-full max-w-[1920px] mx-auto px-2 sm:px-4 pt-12 pb-20 text-center relative z-10">
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-widest mb-10 shadow-[0_0_30px_rgba(59,130,246,0.2)]"
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold uppercase tracking-widest mb-8 shadow-[0_0_20px_rgba(59,130,246,0.15)]"
         >
-          <Zap className="w-4 h-4 animate-pulse" />
-          <span>Nexus Engine 9.0-Ultra Lançado</span>
+          <Zap className="w-3 h-3 animate-pulse" />
+          <span>Nexus Engine 9.0-Ultra</span>
         </motion.div>
         
         <motion.h1 
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.8, ease: "easeOut" }}
-          className="text-7xl md:text-9xl font-extrabold tracking-tighter font-display text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-slate-500 mb-10 leading-[0.9] drop-shadow-2xl"
+          transition={{ delay: 0.1, duration: 0.6, ease: "easeOut" }}
+          className="text-5xl md:text-7xl font-extrabold tracking-tighter font-display text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-slate-500 mb-8 leading-[0.95] drop-shadow-xl"
         >
           A Engine de Extração<br />Definitiva.
         </motion.h1>
         
         <motion.p 
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.8 }}
-          className="text-xl md:text-3xl text-slate-400 max-w-4xl mx-auto mb-16 leading-relaxed font-light tracking-tight"
+          transition={{ delay: 0.2, duration: 0.6 }}
+          className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto mb-12 leading-relaxed font-light tracking-tight"
         >
-          Construído para performance extrema. O <span className="text-white font-medium">Nexus Engine 9.0-Ultra</span> combina Orquestração Híbrida, Radar Heurístico e Cache SWR para entregar dados financeiros em milissegundos.
+          Performance extrema com <span className="text-white font-medium">Nexus Engine 9.0-Ultra</span>. Orquestração Híbrida e Cache SWR para dados financeiros em milissegundos.
         </motion.p>
         
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.8 }}
-          className="flex flex-col sm:flex-row items-center justify-center gap-6"
+          transition={{ delay: 0.3, duration: 0.6 }}
+          className="flex flex-col sm:flex-row items-center justify-center gap-4"
         >
           <a 
             href="#playground" 
             onClick={(e) => handleNavClick(e, '#playground')}
-            className="w-full sm:w-auto px-10 py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold text-xl transition-all shadow-[0_0_40px_rgba(37,99,235,0.4)] hover:shadow-[0_0_60px_rgba(37,99,235,0.6)] hover:-translate-y-1.5 flex items-center justify-center gap-3 group"
+            className="w-full sm:w-auto px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-lg transition-all shadow-lg shadow-blue-900/20 hover:-translate-y-1 flex items-center justify-center gap-2 group"
           >
-            <Play className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
-            Testar no Playground
+            <Play className="w-5 h-5 fill-current group-hover:scale-110 transition-transform" />
+            Playground
           </a>
           <a 
             href="#api" 
             onClick={(e) => handleNavClick(e, '#api')}
-            className="w-full sm:w-auto px-10 py-5 glass-dark hover:bg-slate-800/80 text-white rounded-2xl font-bold text-xl transition-all border border-white/10 hover:border-white/20 hover:-translate-y-1.5 flex items-center justify-center gap-3"
+            className="w-full sm:w-auto px-8 py-4 glass-dark hover:bg-slate-800/80 text-white rounded-xl font-bold text-lg transition-all border border-white/10 hover:-translate-y-1 flex items-center justify-center gap-2"
           >
-            <Code2 className="w-6 h-6 text-blue-400" />
-            Ver Documentação
+            <Code2 className="w-5 h-5 text-blue-400" />
+            Documentação
           </a>
         </motion.div>
 
@@ -151,126 +151,122 @@ export default function HomePage() {
       </section>
 
       {/* Benchmark Section */}
-      <section id="benchmark" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-32 border-t border-white/5 scroll-mt-32">
-        <div className="mb-16 text-center">
+      <section id="benchmark" className="w-full max-w-[1920px] mx-auto px-2 sm:px-4 py-16 border-t border-white/5 scroll-mt-24">
+        <div className="mb-12 text-center">
           <motion.h2 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-4xl md:text-6xl font-bold font-display text-white mb-6 tracking-tighter"
+            className="text-3xl md:text-5xl font-bold font-display text-white mb-4 tracking-tighter"
           >
-            Performance Incomparável
+            Performance
           </motion.h2>
           <motion.p 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
-            className="text-slate-400 max-w-2xl mx-auto text-lg"
+            className="text-slate-400 max-w-xl mx-auto text-sm"
           >
-            Métricas reais extraídas do núcleo da engine comparando a arquitetura legada com o novo Nexus Core.
+            Métricas reais comparando o Nexus Core com a arquitetura legada.
           </motion.p>
         </div>
         <BenchmarkTab />
       </section>
 
-      {/* Statistics Section - Bento Grid Style */}
-      <section id="stats" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-32 border-t border-white/5 relative scroll-mt-32">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative z-10">
+      {/* Statistics Section */}
+      <section id="stats" className="w-full max-w-[1920px] mx-auto px-2 sm:px-4 py-16 border-t border-white/5 relative scroll-mt-24">
+        <div className="grid grid-cols-2 gap-4 relative z-10 max-w-2xl mx-auto">
           {[
-            { label: 'Concorrência Máxima', value: '5 reqs/lote', icon: <Globe className="w-6 h-6" />, color: 'blue', desc: 'Processamento paralelo otimizado.' },
-            { label: 'Parser HTML', value: 'Zero-AST', icon: <Zap className="w-6 h-6" />, color: 'emerald', desc: 'Extração direta sem overhead de DOM.' },
-            { label: 'Tentativas (Retries)', value: 'Até 2x', icon: <Activity className="w-6 h-6" />, color: 'blue', desc: 'Resiliência contra falhas temporárias.' },
-            { label: 'Alocação de Memória', value: 'O(1)', icon: <BarChart3 className="w-6 h-6" />, color: 'indigo', desc: 'Consumo constante independente do tamanho.' }
+            { label: 'Concorrência', value: '5 reqs/lote', icon: <Globe className="w-5 h-5" />, color: 'blue' },
+            { label: 'Parser HTML', value: 'Zero-AST', icon: <Zap className="w-5 h-5" />, color: 'emerald' },
+            { label: 'Resiliência', value: 'Até 2x', icon: <Activity className="w-5 h-5" />, color: 'blue' },
+            { label: 'Memória', value: 'O(1)', icon: <BarChart3 className="w-5 h-5" />, color: 'indigo' }
           ].map((stat, i) => (
             <motion.div
               key={i}
-              initial={{ opacity: 0, y: 30 }}
+              initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-              className="glass-dark border border-white/5 p-8 rounded-4xl group hover:bg-slate-900/40 transition-all card-hover technical-border"
+              transition={{ delay: i * 0.05 }}
+              className="glass-dark border border-white/5 p-6 rounded-3xl group hover:bg-slate-900/40 transition-all card-hover flex flex-col items-center justify-center text-center aspect-square sm:aspect-auto sm:min-h-[160px]"
             >
               <div className={cn(
-                "w-14 h-14 rounded-2xl mb-6 flex items-center justify-center border transition-all group-hover:scale-110 group-hover:rotate-3",
+                "w-10 h-10 rounded-xl mb-4 flex items-center justify-center border transition-all group-hover:scale-110",
                 stat.color === 'blue' ? "bg-blue-500/10 border-blue-500/20 text-blue-400" :
                 stat.color === 'emerald' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" :
                 "bg-indigo-500/10 border-indigo-500/20 text-indigo-400"
               )}>
                 {stat.icon}
               </div>
-              <p className="text-3xl font-bold text-white font-display mb-2">{stat.value}</p>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-4">{stat.label}</p>
-              <p className="text-sm text-slate-400 leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-500">{stat.desc}</p>
+              <p className="text-xl sm:text-2xl font-bold text-white font-display mb-1 tracking-tight">{stat.value}</p>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{stat.label}</p>
             </motion.div>
           ))}
         </div>
       </section>
 
       {/* Use Cases Section */}
-      <section id="use-cases" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-24 border-t border-slate-800/50 scroll-mt-32">
-        <div className="mb-12 text-center">
-          <h2 className="text-3xl font-bold font-display text-white mb-4">Casos de Uso</h2>
-          <p className="text-slate-400 max-w-2xl mx-auto">Onde a performance extrema do Nexus Engine faz a diferença no mundo real.</p>
+      <section id="use-cases" className="w-full max-w-[1920px] mx-auto px-2 sm:px-4 py-16 border-t border-slate-800/50 scroll-mt-24">
+        <div className="mb-10 text-center">
+          <h2 className="text-2xl font-bold font-display text-white mb-2">Casos de Uso</h2>
+          <p className="text-slate-400 max-w-xl mx-auto text-sm">Aplicações práticas da performance extrema do Nexus.</p>
         </div>
         <UseCasesSection />
       </section>
 
       {/* Architecture Section */}
-      <section id="features" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-24 border-t border-slate-800/50 bg-slate-900/20 scroll-mt-32">
+      <section id="features" className="w-full max-w-[1920px] mx-auto px-2 sm:px-4 py-16 border-t border-slate-800/50 bg-slate-900/20 scroll-mt-24">
         <ArchitectureTab />
       </section>
 
       {/* Source Code Section */}
-      <section id="source" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-24 border-t border-slate-800/50 scroll-mt-32">
-        <div className="mb-12">
-          <h2 className="text-3xl font-bold font-display text-white mb-4">Código Fonte do Núcleo</h2>
-          <p className="text-slate-400 max-w-2xl">O Nexus Engine é open-source. Abaixo está a implementação principal do motor de extração híbrido.</p>
+      <section id="source" className="w-full max-w-[1920px] mx-auto px-2 sm:px-4 py-16 border-t border-slate-800/50 scroll-mt-24">
+        <div className="mb-10">
+          <h2 className="text-2xl font-bold font-display text-white mb-2">Código Fonte</h2>
+          <p className="text-slate-400 max-w-xl text-sm">Implementação principal do motor de extração híbrido.</p>
         </div>
-        <div className="glass rounded-3xl border border-slate-800/50 overflow-hidden shadow-2xl card-shadow">
-          <div className="bg-slate-900/50 px-6 py-3 border-b border-slate-800/50 flex items-center justify-between">
+        <div className="glass rounded-2xl border border-slate-800/50 overflow-hidden shadow-xl">
+          <div className="bg-slate-900/50 px-5 py-2.5 border-b border-slate-800/50 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-red-500/50" />
-                <div className="w-3 h-3 rounded-full bg-yellow-500/50" />
-                <div className="w-3 h-3 rounded-full bg-green-500/50" />
-                <span className="text-xs font-mono text-slate-400 ml-4">nexus-engine.ts</span>
+              <div className="flex gap-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
+                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
+                <div className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
+                <span className="text-[10px] font-mono text-slate-400 ml-3">nexus-engine.ts</span>
               </div>
             </div>
             <button 
-              onClick={() => {
-                const code = nexusCode;
-                navigator.clipboard.writeText(code);
-              }}
-              className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-2 transition-colors"
+              onClick={() => navigator.clipboard.writeText(nexusCode)}
+              className="text-[10px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors"
             >
-              <Copy className="w-3.5 h-3.5" />
-              Copiar Código
+              <Copy className="w-3 h-3" />
+              Copiar
             </button>
           </div>
-          <div className={cn("p-6 overflow-x-auto bg-slate-950/80 relative transition-all duration-500", isCodeExpanded ? "max-h-none" : "max-h-[400px] overflow-hidden")}>
-            <pre className="text-sm font-mono leading-relaxed text-slate-300">
+          <div className={cn("p-5 overflow-x-auto bg-slate-950/80 relative transition-all duration-500", isCodeExpanded ? "max-h-none" : "max-h-[300px] overflow-hidden")}>
+            <pre className="text-xs font-mono leading-relaxed text-slate-300">
               {nexusCode}
             </pre>
             {!isCodeExpanded && (
-              <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent flex items-end justify-center pb-6">
+              <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent flex items-end justify-center pb-4">
                 <button 
                   onClick={() => setIsCodeExpanded(true)} 
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all hover:-translate-y-0.5"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-900/20 transition-all"
                 >
-                  <ChevronDown className="w-4 h-4" />
-                  Expandir Código Completo
+                  <ChevronDown className="w-3.5 h-3.5" />
+                  Expandir Código
                 </button>
               </div>
             )}
             {isCodeExpanded && (
-              <div className="mt-8 flex justify-center border-t border-slate-800/50 pt-6">
+              <div className="mt-6 flex justify-center border-t border-slate-800/50 pt-4">
                 <button 
                   onClick={() => setIsCodeExpanded(false)} 
-                  className="flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm font-bold shadow-lg transition-all hover:-translate-y-0.5 border border-slate-700"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold shadow-lg transition-all border border-slate-700"
                 >
-                  <ChevronUp className="w-4 h-4" />
-                  Recolher Código
+                  <ChevronUp className="w-3.5 h-3.5" />
+                  Recolher
                 </button>
               </div>
             )}
@@ -279,16 +275,16 @@ export default function HomePage() {
       </section>
 
       {/* Playground Section */}
-      <section id="playground" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-24 border-t border-slate-800/50 scroll-mt-32">
-        <div className="mb-12 text-center">
-          <h2 className="text-3xl font-bold font-display text-white mb-4">Playground Interativo</h2>
-          <p className="text-slate-400 max-w-2xl mx-auto">Teste a velocidade e resiliência do Nexus Engine em tempo real.</p>
+      <section id="playground" className="w-full max-w-[1920px] mx-auto px-2 sm:px-4 py-16 border-t border-slate-800/50 scroll-mt-24">
+        <div className="mb-10 text-center">
+          <h2 className="text-2xl font-bold font-display text-white mb-2">Playground</h2>
+          <p className="text-slate-400 max-w-xl mx-auto text-sm">Teste a velocidade do Nexus Engine em tempo real.</p>
         </div>
         <TestTab />
       </section>
 
       {/* API & Docs Section */}
-      <section id="api" className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 py-24 border-t border-slate-800/50 bg-slate-900/20 scroll-mt-32">
+      <section id="api" className="w-full max-w-[1920px] mx-auto px-2 sm:px-4 py-16 border-t border-slate-800/50 bg-slate-900/20 scroll-mt-24">
         <InfoTab nexusCode={nexusCode} />
       </section>
 

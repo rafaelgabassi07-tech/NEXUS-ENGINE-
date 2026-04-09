@@ -30,127 +30,129 @@ export function InfoTab({ nexusCode }: InfoTabProps) {
   };
 
   const endpoints = [
-    { name: 'Scraper Standard', method: 'POST', path: '/api/scrape', desc: 'Extração rápida e simplificada.' },
-    { name: 'Scraper Advanced (v2)', method: 'POST', path: '/api/scrape-v2', desc: 'Métricas detalhadas e notícias.' },
-    { name: 'Stats Engine', method: 'GET', path: '/api/stats', desc: 'Métricas de performance em tempo real.' },
-    { name: 'Clear Cache', method: 'POST', path: '/api/clear-cache', desc: 'Limpeza manual do cache global.' },
-    { name: 'Health Check', method: 'GET', path: '/api/health', desc: 'Status operacional do sistema.' }
+    { name: 'Nexus Scraper', method: 'POST', path: '/api/scrape', desc: 'Extração rápida e simplificada via Nexus Engine.' },
+    { name: 'Nexus Scraper V2', method: 'POST', path: '/api/scrape-v2', desc: 'Métricas detalhadas, notícias e indicadores.' },
+    { name: 'Stats Engine', method: 'GET', path: '/api/stats', desc: 'Métricas de performance e latência em tempo real.' },
+    { name: 'Clear Cache', method: 'POST', path: '/api/clear-cache', desc: 'Limpeza manual do cache global (Edge/Serverless).' },
+    { name: 'Health Check', method: 'GET', path: '/api/health', desc: 'Status operacional e integridade do sistema.' }
   ];
 
   const codeExample = `import { NexusEngineUltra, runNexusBatch } from './nexus-core';
 
-// 1. Busca um único ativo (Fundamentos)
+// 1. Busca um único ativo
 const data = await NexusEngineUltra.fetchAtivo('PETR4', 'ACAO');
-console.log(data);
 
-// 2. Busca em Lote (Batching Paralelo)
-const batch = await runNexusBatch(['VALE3', 'ITUB4', 'ABEV3'], 'ACAO');
-console.log(batch);`;
+// 2. Busca em Lote
+const batch = await runNexusBatch(['VALE3', 'ITUB4'], 'ACAO');`;
 
   const jsonSchema = `{
   "tickers": ["PETR4", "VALE3"],
-  "type": "ACAO", // "ACAO", "FII", "BDR"
-  "includeNews": true // Opcional (apenas v2)
+  "type": "ACAO",
+  "includeNews": true
 }`;
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="space-y-12 pb-12"
+      className="space-y-8 pb-8"
     >
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-4xl md:text-5xl font-bold tracking-tighter font-display text-white">Documentação Técnica</h2>
-          <p className="text-slate-400 mt-3 max-w-2xl text-lg font-light">Guia completo para integração e consumo da API Nexus Engine 9.0-Ultra.</p>
+          <h2 className="text-3xl font-bold tracking-tight font-display text-white">Documentação</h2>
+          <p className="text-slate-400 mt-1 text-sm font-light">Guia de integração Nexus Engine 9.0-Ultra.</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-4">
-          <button onClick={handleDownload} className="flex items-center justify-center gap-3 px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl transition-all shadow-xl shadow-blue-900/20 active:scale-95 group">
-            <Download className="w-5 h-5 group-hover:animate-bounce" />
-            Download Engine
+        <div className="flex items-center gap-3">
+          <button onClick={handleDownload} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-blue-900/20 active:scale-95 group">
+            <Download className="w-4 h-4 group-hover:animate-bounce" />
+            Engine JS
           </button>
-          <div className="flex items-center gap-3 px-6 py-4 bg-indigo-600/10 border border-indigo-500/20 rounded-2xl shadow-xl backdrop-blur-md">
-            <Code2 className="w-5 h-5 text-indigo-400" />
-            <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">API v2.0-Stable</span>
+          <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-indigo-600/10 border border-indigo-500/20 rounded-xl">
+            <Code2 className="w-4 h-4 text-indigo-400" />
+            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">v2.0-Stable</span>
           </div>
         </div>
       </div>
 
       {/* Endpoints Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {endpoints.map((ep, i) => (
           <motion.div
             key={i}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: i * 0.05 }}
-            className="glass-dark border border-white/5 p-6 rounded-4xl card-hover technical-border group"
+            className="glass-dark border border-white/5 p-3 rounded-xl card-hover flex flex-col justify-between gap-3 group relative overflow-hidden"
           >
-            <div className="flex items-center justify-between mb-4">
-              <span className={cn(
-                "px-3 py-1 rounded-lg text-[10px] font-black tracking-widest uppercase",
-                ep.method === 'POST' ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-              )}>
-                {ep.method}
-              </span>
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    "px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest uppercase border",
+                    ep.method === 'POST' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                  )}>
+                    {ep.method}
+                  </span>
+                  <h3 className="text-xs font-bold text-white font-display truncate max-w-[120px]">{ep.name}</h3>
+                </div>
+                <p className="text-[9px] text-slate-500 font-mono truncate">{ep.path}</p>
+              </div>
               <button 
                 onClick={() => copyToClipboard(getFullUrl(ep.path), ep.path)}
-                className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-500 hover:text-white"
-                title="Copiar URL completa"
+                className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-slate-500 hover:text-white"
               >
-                {copied === ep.path ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                {copied === ep.path ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
               </button>
             </div>
-            <h3 className="text-lg font-bold text-white font-display mb-1 tracking-tight">{ep.name}</h3>
-            <p className="text-xs text-slate-500 mb-4 font-medium uppercase tracking-wider">{ep.path}</p>
-            <p className="text-sm text-slate-400 leading-relaxed mb-6">{ep.desc}</p>
             
-            <div className="p-3 bg-black/40 rounded-2xl border border-white/5 font-mono text-[10px] text-slate-500 break-all select-all">
-              {getFullUrl(ep.path)}
+            <p className="text-[10px] text-slate-400 leading-tight line-clamp-2">{ep.desc}</p>
+            
+            <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />
+                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Active</span>
+              </div>
+              <span className="text-[8px] font-mono text-slate-600 truncate max-w-[100px]">{getFullUrl(ep.path).replace(/^https?:\/\//, '')}</span>
             </div>
           </motion.div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Code Example */}
-        <div className="glass-dark border border-white/5 rounded-4xl p-8 card-shadow relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="glass-dark border border-white/5 rounded-3xl p-6 relative group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-blue-400" />
+              <h3 className="text-sm font-bold text-white font-display uppercase tracking-widest">Integração</h3>
+            </div>
             <button 
               onClick={() => copyToClipboard(codeExample, 'code')}
-              className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all backdrop-blur-md"
+              className="p-2 hover:bg-white/10 rounded-lg transition-all"
             >
-              {copied === 'code' ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5 text-white" />}
+              {copied === 'code' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-slate-500" />}
             </button>
           </div>
-          <div className="flex items-center gap-3 mb-8">
-            <div className="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20">
-              <Terminal className="w-6 h-6 text-blue-400" />
-            </div>
-            <h3 className="text-2xl font-bold text-white font-display tracking-tight">Exemplo de Integração</h3>
-          </div>
-          <pre className="p-6 bg-black/60 rounded-3xl border border-white/5 font-mono text-sm text-blue-300 overflow-x-auto leading-relaxed">
+          <pre className="p-4 bg-black/60 rounded-2xl border border-white/5 font-mono text-[11px] text-blue-300 overflow-x-auto leading-relaxed">
             <code>{codeExample}</code>
           </pre>
         </div>
 
         {/* JSON Schema */}
-        <div className="glass-dark border border-white/5 rounded-4xl p-8 card-shadow relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="glass-dark border border-white/5 rounded-3xl p-6 relative group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Code2 className="w-4 h-4 text-indigo-400" />
+              <h3 className="text-sm font-bold text-white font-display uppercase tracking-widest">Request Schema</h3>
+            </div>
             <button 
               onClick={() => copyToClipboard(jsonSchema, 'json')}
-              className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all backdrop-blur-md"
+              className="p-2 hover:bg-white/10 rounded-lg transition-all"
             >
-              {copied === 'json' ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5 text-white" />}
+              {copied === 'json' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-slate-500" />}
             </button>
           </div>
-          <div className="flex items-center gap-3 mb-8">
-            <div className="p-3 bg-indigo-500/10 rounded-2xl border border-indigo-500/20">
-              <Code2 className="w-6 h-6 text-indigo-400" />
-            </div>
-            <h3 className="text-2xl font-bold text-white font-display tracking-tight">JSON Request Schema</h3>
-          </div>
-          <pre className="p-6 bg-black/60 rounded-3xl border border-white/5 font-mono text-sm text-indigo-300 overflow-x-auto leading-relaxed">
+          <pre className="p-4 bg-black/60 rounded-2xl border border-white/5 font-mono text-[11px] text-indigo-300 overflow-x-auto leading-relaxed">
             <code>{jsonSchema}</code>
           </pre>
         </div>
