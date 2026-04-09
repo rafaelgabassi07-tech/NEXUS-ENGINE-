@@ -489,42 +489,42 @@ export function BenchmarkTab() {
         <p className="text-slate-400 mt-2">Teste a performance do Nexus, compare com scrapers tradicionais ou analise seu próprio código.</p>
       </div>
 
-      <div className="flex flex-wrap gap-2 p-1 bg-slate-900/50 border border-slate-800 rounded-2xl w-fit">
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 p-1 bg-slate-900/50 border border-slate-800 rounded-2xl w-full sm:w-fit">
         <button 
           onClick={() => setActiveTab('load')}
           className={cn(
-            "px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
+            "px-3 py-2 rounded-xl text-[11px] sm:text-sm font-bold transition-all flex items-center justify-center sm:justify-start gap-2",
             activeTab === 'load' ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" : "text-slate-400 hover:text-white hover:bg-slate-800/50"
           )}
         >
-          <Activity className="w-4 h-4" /> Teste de Carga
+          <Activity className="w-3.5 h-3.5" /> Teste de Carga
         </button>
         <button 
           onClick={() => setActiveTab('race')}
           className={cn(
-            "px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
+            "px-3 py-2 rounded-xl text-[11px] sm:text-sm font-bold transition-all flex items-center justify-center sm:justify-start gap-2",
             activeTab === 'race' ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20" : "text-slate-400 hover:text-white hover:bg-slate-800/50"
           )}
         >
-          <Swords className="w-4 h-4" /> Corrida de Scrapers
+          <Swords className="w-3.5 h-3.5" /> Corrida de Scrapers
         </button>
         <button 
           onClick={() => setActiveTab('analyzer')}
           className={cn(
-            "px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
+            "px-3 py-2 rounded-xl text-[11px] sm:text-sm font-bold transition-all flex items-center justify-center sm:justify-start gap-2",
             activeTab === 'analyzer' ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20" : "text-slate-400 hover:text-white hover:bg-slate-800/50"
           )}
         >
-          <Code2 className="w-4 h-4" /> Analisador
+          <Code2 className="w-3.5 h-3.5" /> Analisador
         </button>
         <button 
           onClick={() => setActiveTab('history')}
           className={cn(
-            "px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
+            "px-3 py-2 rounded-xl text-[11px] sm:text-sm font-bold transition-all flex items-center justify-center sm:justify-start gap-2",
             activeTab === 'history' ? "bg-slate-700 text-white shadow-lg shadow-slate-500/20" : "text-slate-400 hover:text-white hover:bg-slate-800/50"
           )}
         >
-          <History className="w-4 h-4" /> Histórico
+          <History className="w-3.5 h-3.5" /> Histórico
         </button>
       </div>
 
@@ -549,23 +549,23 @@ export function BenchmarkTab() {
                   </h3>
                   <p className="text-xs text-slate-400 mt-1">Executa requisições paralelas com deduplicação e fallback.</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
                   <button 
                     onClick={() => setStressMode(!stressMode)}
                     className={cn(
-                      "px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all",
+                      "px-3 py-2.5 rounded-xl text-[10px] font-bold flex items-center justify-center gap-2 transition-all",
                       stressMode ? "bg-red-500/20 text-red-400 border border-red-500/30" : "bg-slate-800 text-slate-400 border border-slate-700"
                     )}
                   >
                     <Flame className={cn("w-3.5 h-3.5", stressMode && "animate-pulse")} />
                     Stress Mode
                   </button>
-                  <select value={testSize} onChange={(e) => setTestSize(Number(e.target.value))} disabled={isRunning} className="bg-slate-900 border border-slate-700 text-white text-sm rounded-xl px-3 py-2">
+                  <select value={testSize} onChange={(e) => setTestSize(Number(e.target.value))} disabled={isRunning} className="bg-slate-900 border border-slate-700 text-white text-xs rounded-xl px-3 py-2.5 outline-none focus:border-blue-500/50">
                     <option value={5}>5 Ativos</option>
                     <option value={10}>10 Ativos</option>
                     {stressMode && <option value={20}>20 Ativos (Stress)</option>}
                   </select>
-                  <button onClick={runBenchmark} disabled={isRunning} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white font-bold rounded-xl flex items-center gap-2">
+                  <button onClick={runBenchmark} disabled={isRunning} className="col-span-2 sm:col-span-1 px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20 transition-all active:scale-95">
                     {isRunning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                     {isRunning ? 'Executando...' : 'Iniciar'}
                   </button>
@@ -949,14 +949,14 @@ export function BenchmarkTab() {
                   </div>
 
                   {/* Detailed Comparison Table */}
-                  <div className="mt-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/30">
-                    <table className="w-full text-left text-xs">
+                  <div className="mt-8 overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/30 scrollbar-hide">
+                    <table className="w-full text-left text-[10px] sm:text-xs min-w-[500px]">
                       <thead className="bg-slate-800/50 text-slate-400 font-bold uppercase tracking-wider">
                         <tr>
-                          <th className="px-4 py-3">Ticker</th>
-                          <th className="px-4 py-3">Status Padrão</th>
-                          <th className="px-4 py-3">Status Nexus</th>
-                          <th className="px-4 py-3">Vantagem Nexus</th>
+                          <th className="px-3 sm:px-4 py-3">Ticker</th>
+                          <th className="px-3 sm:px-4 py-3">Status Padrão</th>
+                          <th className="px-3 sm:px-4 py-3">Status Nexus</th>
+                          <th className="px-3 sm:px-4 py-3">Vantagem Nexus</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800">
@@ -969,22 +969,22 @@ export function BenchmarkTab() {
                           
                           return (
                             <tr key={ticker} className="hover:bg-slate-800/20 transition-colors">
-                              <td className="px-4 py-3 font-bold text-white">{ticker}</td>
-                              <td className="px-4 py-3">
+                              <td className="px-3 sm:px-4 py-3 font-bold text-white">{ticker}</td>
+                              <td className="px-3 sm:px-4 py-3">
                                 {legacy?.error ? (
                                   <span className="text-red-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Erro</span>
                                 ) : (
                                   <span className="text-slate-300 font-mono">{legacyTime.toFixed(0)}ms</span>
                                 )}
                               </td>
-                              <td className="px-4 py-3">
+                              <td className="px-3 sm:px-4 py-3">
                                 {nexus?.error ? (
                                   <span className="text-red-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Erro</span>
                                 ) : (
                                   <span className="text-blue-400 font-mono font-bold">{nexusTime.toFixed(0)}ms</span>
                                 )}
                               </td>
-                              <td className="px-4 py-3">
+                              <td className="px-3 sm:px-4 py-3">
                                 {diff > 0 ? (
                                   <span className="text-emerald-400 font-bold">-{((diff / legacyTime) * 100).toFixed(0)}% tempo</span>
                                 ) : (

@@ -21,12 +21,33 @@ export function InfoTab({ nexusCode }: InfoTabProps) {
   };
 
   const handleDownload = () => {
-    const blob = new Blob([nexusCode], { type: 'text/javascript' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'nexus-engine.js';
-    a.click();
+    try {
+      // Usamos 'text/plain' para garantir que dispositivos móveis consigam abrir como texto,
+      // mas mantemos a extensão .js para identificação.
+      // Adicionamos o BOM (\ufeff) para ajudar editores a reconhecerem a codificação UTF-8.
+      const blob = new Blob(['\ufeff', nexusCode], { type: 'text/plain;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'nexus-engine.js');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed:', error);
+      // Fallback simples
+      const a = document.createElement('a');
+      a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(nexusCode);
+      a.download = 'nexus-engine.js';
+      a.click();
+    }
+  };
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(nexusCode);
+    setCopied('engine-code');
+    setTimeout(() => setCopied(null), 2000);
   };
 
   const endpoints = [
@@ -62,10 +83,22 @@ const batch = await runNexusBatch(['VALE3', 'ITUB4'], 'ACAO');`;
           <h2 className="text-3xl font-bold tracking-tight font-display text-white">Documentação</h2>
           <p className="text-slate-400 mt-1 text-sm font-light">Guia de integração Nexus Engine 9.0-Ultra.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={handleDownload} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-blue-900/20 active:scale-95 group">
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={handleDownload} 
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-blue-900/20 active:scale-95 group"
+            title="Baixar arquivo .js"
+          >
             <Download className="w-4 h-4 group-hover:animate-bounce" />
             Engine JS
+          </button>
+          <button 
+            onClick={handleCopyCode} 
+            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition-all border border-white/5 active:scale-95"
+            title="Copiar código para a área de transferência"
+          >
+            {copied === 'engine-code' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-slate-400" />}
+            {copied === 'engine-code' ? 'Copiado!' : 'Copiar'}
           </button>
           <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-indigo-600/10 border border-indigo-500/20 rounded-xl">
             <Code2 className="w-4 h-4 text-indigo-400" />

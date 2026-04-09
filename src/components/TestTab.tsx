@@ -93,27 +93,29 @@ export function TestTab() {
         <p className="text-slate-400 mt-2">Execute testes de extração em tempo real contra a infraestrutura Nexus.</p>
       </div>
 
-      <div className="glass rounded-3xl border border-slate-800/50 p-6 shadow-2xl card-shadow mb-8 relative overflow-hidden group">
+      <div className="glass rounded-3xl border border-slate-800/50 p-4 sm:p-6 shadow-2xl card-shadow mb-8 relative overflow-hidden group">
         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full -mr-32 -mt-32 blur-3xl group-hover:bg-blue-500/10 transition-colors duration-500" />
-        <div className="relative z-10 flex items-start gap-6">
-          <div className="p-4 bg-blue-500/10 rounded-2xl border border-blue-500/20 hidden md:block shrink-0">
-            <Info className="w-8 h-8 text-blue-400" />
+        <div className="relative z-10 flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
+          <div className="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20 hidden sm:block shrink-0">
+            <Info className="w-6 h-6 text-blue-400" />
           </div>
           <div>
-            <h3 className="text-xl font-bold font-display text-white mb-2">Como funciona o teste?</h3>
-            <p className="text-sm text-slate-400 leading-relaxed mb-5 max-w-3xl">
+            <h3 className="text-lg sm:text-xl font-bold font-display text-white mb-2 flex items-center gap-2">
+              <Info className="w-4 h-4 text-blue-400 sm:hidden" />
+              Como funciona o teste?
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed mb-4 max-w-3xl">
               Ao clicar em "Executar Scraper", o Nexus Engine v9.0-Ultra irá disparar a Orquestração Híbrida. Ele consulta múltiplas fontes em paralelo, deduplica requisições idênticas e usa o Radar Heurístico para extrair dados mesmo sob mudanças de layout. 
-              O parser SAX (Zero-AST) garante que a memória permaneça constante enquanto o Early Abort economiza até 85% de banda.
             </p>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2">
               {[
-                { label: '1. Handshake TCP', color: 'slate' },
-                { label: '2. Stream Download', color: 'slate' },
+                { label: '1. Handshake', color: 'slate' },
+                { label: '2. Stream', color: 'slate' },
                 { label: '3. SAX Parsing', color: 'blue' },
                 { label: '4. Early Abort', color: 'emerald' }
               ].map((step, i) => (
                 <span key={i} className={cn(
-                  "text-[10px] font-bold px-3 py-1.5 rounded-xl border shadow-sm uppercase tracking-widest",
+                  "text-[8px] sm:text-[10px] font-bold px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl border shadow-sm uppercase tracking-widest",
                   step.color === 'slate' ? "bg-slate-800/50 text-slate-300 border-slate-700/50" :
                   step.color === 'blue' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
                   "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
