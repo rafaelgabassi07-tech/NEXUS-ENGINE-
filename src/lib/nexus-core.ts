@@ -1020,18 +1020,25 @@ export class NexusEngineUltra {
 
       const parser = new Parser({
         onopentag(name) {
-          if (name === 'item') currentItem = {};
-          currentTag = name;
+          const tag = name.toLowerCase();
+          if (tag === 'item') currentItem = {};
+          currentTag = tag;
         },
         ontext(text) {
           if (!currentItem) return;
           if (currentTag === 'title') currentItem.title = (currentItem.title || '') + text;
           if (currentTag === 'link') currentItem.link = (currentItem.link || '') + text;
-          if (currentTag === 'pubdate') currentItem.pubDate = new Date((currentItem.pubDate?.toString() || '') + text);
+          if (currentTag === 'pubdate') {
+            const dateStr = (currentItem.pubDate?.toString() || '') + text;
+            const parsedDate = new Date(dateStr);
+            if (!isNaN(parsedDate.getTime())) {
+              currentItem.pubDate = parsedDate;
+            }
+          }
           if (currentTag === 'source') currentItem.source = (currentItem.source || '') + text;
         },
         onclosetag(name) {
-          if (name === 'item' && currentItem && currentItem.title && currentItem.link) {
+          if (name.toLowerCase() === 'item' && currentItem && currentItem.title && currentItem.link) {
             news.push(currentItem as NewsItem);
             currentItem = null;
           }

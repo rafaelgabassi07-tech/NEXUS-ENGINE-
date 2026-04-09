@@ -25,13 +25,14 @@ async function startServer() {
   app.post("/api/scrape", async (req, res) => {
     console.log(`[API] Scrape request received: ${JSON.stringify(req.body)}`);
     try {
-      const { tickers, type } = req.body;
+      const { tickers, type, includeNews } = req.body;
       if (!tickers || !Array.isArray(tickers) || !type) {
         console.warn(`[API] Invalid request body: ${JSON.stringify(req.body)}`);
         return res.status(400).json({ error: "Invalid request body" });
       }
-      const results = await runNexusBatch(tickers, type);
-      console.log(`[API] Scrape completed for ${tickers.length} tickers`);
+      // runNexusBatch(tickers, type, limit, includeNews)
+      const results = await runNexusBatch(tickers, type, undefined, !!includeNews);
+      console.log(`[API] Scrape completed for ${tickers.length} tickers (news: ${!!includeNews})`);
       res.json({ results });
     } catch (error: any) {
       console.error(`[API] Scrape error: ${error.message}`);
