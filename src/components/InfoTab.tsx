@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Download, Copy, Globe, Code2, BarChart3 } from 'lucide-react';
+import { Download, Copy, Globe, Code2, BarChart3, Settings } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface InfoTabProps {
@@ -14,6 +14,10 @@ export function InfoTab({ nexusCode }: InfoTabProps) {
     navigator.clipboard.writeText(text);
     setCopied(id);
     setTimeout(() => setCopied(null), 2000);
+  };
+
+  const getFullUrl = (path: string) => {
+    return `${window.location.origin}${path}`;
   };
 
   const handleDownload = () => {
@@ -31,16 +35,12 @@ export function InfoTab({ nexusCode }: InfoTabProps) {
 const data = await NexusEngineUltra.fetchAtivo('PETR4', 'ACAO');
 console.log(data);
 
-// 2. Busca histórico de cotações para gráficos (ex: 1 ano)
-const historico = await NexusEngineUltra.fetchHistoricoGrafico('PETR4', '1y');
-console.log("Último fechamento:", historico[historico.length - 1].close);
-
-// 3. Busca em lote com controle de concorrência (limit 100)
+// 2. Busca em lote com controle de concorrência e notícias
 const tickers = ['PETR4', 'VALE3', 'MXRF11', 'ITUB4', 'BBDC4'];
-const batch = await runNexusBatch(tickers, 'ACAO', 100);
+const batch = await runNexusBatch(tickers, 'ACAO', 100, true); // true = inclui notícias
 console.log("Processados " + batch.length + " ativos");`;
 
-  const serverlessExample = `import { runNexusBatch } from '../src/lib/nexus-core';
+  const serverlessExample = `import { runNexusBatch, NexusEngineUltra } from '../src/lib/nexus-core';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -48,16 +48,26 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { tickers, type } = req.body;
+    const { tickers, type, includeNews } = req.body;
     
     if (!tickers || !Array.isArray(tickers)) {
       return res.status(400).json({ error: 'Tickers inválidos' });
     }
 
-    // Executa o Nexus Engine (Stateless)
-    const results = await runNexusBatch(tickers, type || 'ACAO', 50);
+    // Executa o Nexus Engine (Stateless) com métricas avançadas
+    const start = performance.now();
+    const results = await runNexusBatch(tickers, type || 'ACAO', 50, !!includeNews);
+    const duration = performance.now() - start;
     
-    res.json({ success: true, data: results });
+    res.json({ 
+      success: true, 
+      results,
+      analysis: {
+        durationMs: duration,
+        engineVersion: '9.0-Ultra',
+        report: NexusEngineUltra.getDetailedReport()
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -169,22 +179,72 @@ export default async function handler(req, res) {
           </pre>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="glass rounded-3xl border border-slate-800/50 p-6 shadow-2xl card-shadow card-hover">
+            <h3 className="text-lg font-bold font-display mb-6 text-white flex items-center gap-2">
+              <Settings className="w-5 h-5 text-slate-400" />
+              Endpoints de Manutenção
+            </h3>
+            <div className="space-y-4">
+              {[
+                { label: 'Stats', method: 'GET', path: '/api/stats' },
+                { label: 'Clear Cache', method: 'POST', path: '/api/clear-cache' },
+                { label: 'Health', method: 'GET', path: '/api/health' }
+              ].map((ep) => (
+                <div key={ep.path} className="flex flex-col gap-2 py-3 border-b border-slate-800/50 last:border-0">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">{ep.label}</span>
+                    <code className={cn(
+                      "text-[10px] font-bold px-2 py-0.5 rounded-lg border",
+                      ep.method === 'GET' ? "text-blue-400 bg-blue-500/10 border-blue-500/20" : "text-red-400 bg-red-500/10 border-red-500/20"
+                    )}>{ep.method}</code>
+                  </div>
+                  <div className="flex items-center gap-2 bg-slate-950/50 p-2 rounded-xl border border-slate-800 group/url">
+                    <code className="text-[10px] font-mono text-slate-400 truncate flex-1">{getFullUrl(ep.path)}</code>
+                    <button 
+                      onClick={() => copyToClipboard(getFullUrl(ep.path), ep.path)}
+                      className="text-[10px] font-bold text-slate-500 hover:text-blue-400 transition-colors"
+                    >
+                      {copied === ep.path ? 'COPIADO' : <Copy className="w-3 h-3" />}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="glass rounded-3xl border border-slate-800/50 p-6 shadow-2xl card-shadow card-hover">
             <h3 className="text-lg font-bold font-display mb-6 text-white flex items-center gap-2">
               <Globe className="w-5 h-5 text-blue-400" />
               Endpoint Público (Demo)
             </h3>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center py-3 border-b border-slate-800/50">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">URL</span>
-                <code className="text-xs font-bold text-blue-400 bg-blue-500/10 px-3 py-1 rounded-lg border border-blue-500/20">/api/scrape</code>
-              </div>
-              <div className="flex justify-between items-center py-3 border-b border-slate-800/50">
+            <div className="space-y-6">
+              {[
+                { label: 'URL (Standard)', path: '/api/scrape', color: 'blue' },
+                { label: 'URL (Advanced)', path: '/api/scrape-v2', color: 'emerald' }
+              ].map((ep) => (
+                <div key={ep.path} className="space-y-2">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">{ep.label}</span>
+                  <div className="flex items-center gap-2 bg-slate-950/50 p-3 rounded-xl border border-slate-800 group/url">
+                    <code className={cn(
+                      "text-xs font-bold truncate flex-1",
+                      ep.color === 'blue' ? "text-blue-400" : "text-emerald-400"
+                    )}>{getFullUrl(ep.path)}</code>
+                    <button 
+                      onClick={() => copyToClipboard(getFullUrl(ep.path), ep.path)}
+                      className="text-xs font-bold text-slate-500 hover:text-white transition-colors p-1"
+                    >
+                      {copied === ep.path ? 'COPIADO' : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              ))}
+              
+              <div className="flex justify-between items-center py-3 border-t border-slate-800/50">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Método</span>
                 <code className="text-xs font-bold text-slate-200 bg-slate-800 px-3 py-1 rounded-lg border border-slate-700">POST</code>
               </div>
-              <div className="flex justify-between items-center py-3">
+              <div className="flex justify-between items-center py-3 border-t border-slate-800/50">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Content-Type</span>
                 <code className="text-xs font-bold text-slate-200 bg-slate-800 px-3 py-1 rounded-lg border border-slate-700">application/json</code>
               </div>
@@ -199,7 +259,8 @@ export default async function handler(req, res) {
             <pre className="p-4 bg-slate-950/80 text-blue-200 rounded-2xl overflow-x-auto text-[10px] font-mono leading-relaxed border border-slate-800 inner-shadow">
               {`{
   "tickers": ["PETR4", "VALE3"],
-  "type": "ACAO"
+  "type": "ACAO",
+  "includeNews": true
 }`}
             </pre>
             <div className="mt-6 space-y-2">
@@ -211,8 +272,12 @@ export default async function handler(req, res) {
                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                 <strong className="text-slate-400">type</strong> (obrigatório): <code>ACAO</code> ou <code>FII</code>.
               </div>
+              <div className="text-[10px] text-slate-500 leading-relaxed flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                <strong className="text-slate-400">includeNews</strong> (opcional): Booleano para buscar notícias.
+              </div>
               <div className="text-[10px] text-blue-400/60 leading-relaxed mt-4 italic">
-                * O endpoint é real e funcional. Use ferramentas como Postman ou cURL para testar via POST.
+                * O endpoint v2 retorna um objeto <code>analysis</code> com métricas de performance e relatórios do motor.
               </div>
             </div>
           </div>

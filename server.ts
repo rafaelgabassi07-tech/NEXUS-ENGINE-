@@ -11,11 +11,15 @@ async function startServer() {
   app.use(express.json());
 
   app.use((req, res, next) => {
-    const log = `[REQUEST] ${new Date().toISOString()} ${req.method} ${req.url}\n`;
-    console.log(log.trim());
-    import('fs').then(fs => {
-      fs.appendFileSync('requests.log', log);
-    }).catch(console.error);
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      const log = `[REQUEST] ${new Date().toISOString()} ${req.method} ${req.url} ${res.statusCode} ${duration}ms\n`;
+      console.log(log.trim());
+      import('fs').then(fs => {
+        fs.appendFileSync('requests.log', log);
+      }).catch(console.error);
+    });
     next();
   });
 
@@ -41,6 +45,34 @@ async function startServer() {
     }
   });
 
+  app.post("/api/scrape-v2", async (req, res) => {
+    console.log(`[API V2] Scrape request received: ${JSON.stringify(req.body)}`);
+    try {
+      const { tickers, type, includeNews } = req.body;
+      if (!tickers || !Array.isArray(tickers) || !type) {
+        return res.status(400).json({ error: "Invalid request body" });
+      }
+      
+      const start = performance.now();
+      const results = await runNexusBatch(tickers, type, undefined, !!includeNews);
+      const duration = performance.now() - start;
+
+      // Add some analysis to the response
+      const analysis = {
+        durationMs: duration,
+        successRate: (results.filter(r => !('error' in r)).length / tickers.length) * 100,
+        totalBytes: results.reduce((acc, r) => acc + (('metrics' in r) ? r.metrics.bytesProcessed : 0), 0),
+        avgTimePerTicker: duration / tickers.length,
+        engineVersion: '9.0-Ultra',
+        report: NexusEngineUltra.getDetailedReport()
+      };
+
+      res.json({ results, analysis });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/clear-cache", (req, res) => {
     NexusEngineUltra.clearCache();
     res.json({ success: true });
@@ -51,8 +83,9 @@ async function startServer() {
   });
 
   app.post("/api/benchmark-compare", async (req, res) => {
+    console.log(`[API] Benchmark Race request received: ${JSON.stringify(req.body)}`);
     try {
-      const { tickers } = req.body;
+      const { tickers, customEndpoint } = req.body;
       if (!tickers || !Array.isArray(tickers)) {
         return res.status(400).json({ error: "Invalid tickers" });
       }
@@ -61,25 +94,61 @@ async function startServer() {
       NexusEngineUltra.clearCache();
 
       // Run Legacy
+      console.log(`[API] Running Legacy Scraper for ${tickers.length} tickers...`);
       const legacyStart = performance.now();
       const legacyResults = await runLegacyScraper(tickers);
       const legacyTime = performance.now() - legacyStart;
+
+      // Run Custom Endpoint if provided
+      let customEndpointData = null;
+      if (customEndpoint) {
+        console.log(`[API] Running Custom Endpoint: ${customEndpoint}`);
+        const customStart = performance.now();
+        const customResults = await Promise.all(tickers.map(async (ticker) => {
+          const tStart = performance.now();
+          try {
+            const url = customEndpoint.replace('{{ticker}}', ticker.toLowerCase());
+            const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+            const data = await response.text();
+            return {
+              ticker,
+              time: performance.now() - tStart,
+              success: response.ok,
+              size: data.length
+            };
+          } catch (e: any) {
+            return { ticker, time: performance.now() - tStart, success: false, error: e.message };
+          }
+        }));
+        customEndpointData = {
+          time: performance.now() - customStart,
+          results: customResults
+        };
+      }
 
       // Clear cache again
       NexusEngineUltra.clearCache();
 
       // Run Nexus
+      console.log(`[API] Running Nexus Engine for ${tickers.length} tickers...`);
       const nexusStart = performance.now();
       const nexusResults = await runNexusBatch(tickers, 'ACAO', undefined, false);
       const nexusTime = performance.now() - nexusStart;
 
+      console.log(`[API] Benchmark Race completed. Nexus: ${nexusTime.toFixed(2)}ms, Legacy: ${legacyTime.toFixed(2)}ms`);
       res.json({
         legacy: { time: legacyTime, results: legacyResults },
-        nexus: { time: nexusTime, results: nexusResults }
+        nexus: { time: nexusTime, results: nexusResults },
+        customEndpoint: customEndpointData
       });
     } catch (error: any) {
+      console.error(`[API] Benchmark Race error: ${error.message}`);
       res.status(500).json({ error: error.message });
     }
+  });
+
+  app.get("/api/benchmark-compare", (req, res) => {
+    res.status(405).json({ error: "Method Not Allowed. This endpoint requires a POST request with tickers." });
   });
 
   app.use("/api/*", (req, res) => {

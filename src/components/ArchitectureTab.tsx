@@ -18,7 +18,7 @@ export function ArchitectureTab() {
         </div>
         <div className="flex items-center gap-2 px-4 py-2 bg-blue-600 rounded-2xl shadow-lg">
           <Cpu className="w-4 h-4 text-white" />
-          <span className="text-[10px] font-bold text-white uppercase tracking-widest">Arquitetura v3.1</span>
+          <span className="text-[10px] font-bold text-white uppercase tracking-widest">Arquitetura v9.0</span>
         </div>
       </div>
 
@@ -118,7 +118,7 @@ export function ArchitectureTab() {
                   </div>
                   <h3 className="font-bold text-white font-display">Orquestração Híbrida</h3>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">Integração inteligente entre Investidor10, Status Invest e Yahoo Finance. O Nexus v3.1 complementa dados faltantes em tempo real, garantindo 100% de preenchimento.</p>
+                <p className="text-xs text-slate-400 leading-relaxed">Integração inteligente entre Investidor10, Status Invest e Yahoo Finance. O Nexus v9.0 complementa dados faltantes em tempo real, garantindo 100% de preenchimento.</p>
               </div>
               <div className="py-5">
                 <div className="flex items-center gap-3 mb-2">

@@ -73,10 +73,10 @@ export function SettingsTab() {
               <div className="flex flex-col justify-between h-full gap-5">
                 <div>
                   <h4 className="text-base font-bold font-display mb-1 text-white">Gerenciamento de Memória</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed">Devido à natureza efêmera do Serverless, o cache LRU em memória foi desativado. Cada requisição à API garante dados 100% frescos (Stateless Execution).</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">O motor utiliza um cache LRU (Least Recently Used) com Stale-While-Revalidate. Isso garante respostas em micro-segundos para ativos consultados recentemente.</p>
                 </div>
                 <div className="flex items-center gap-2 bg-slate-900 p-2 rounded-xl border border-slate-800 w-fit">
-                  <span className="text-xs font-bold text-emerald-400">Cache Desativado (Fresh Data)</span>
+                  <span className="text-xs font-bold text-emerald-400">Cache SWR Ativado (High-Speed)</span>
                 </div>
               </div>
             </div>
@@ -158,7 +158,7 @@ export function SettingsTab() {
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
-              { label: 'Versão Engine', value: 'v2.5.0-ultra', color: 'blue' },
+              { label: 'Versão Engine', value: 'v9.0.0-ultra', color: 'blue' },
               { label: 'Runtime', value: 'Node.js 20.x', color: 'blue' },
               { label: 'Infraestrutura', value: 'Vercel Edge/Serverless', color: 'emerald' },
               { label: 'Cliente HTTP', value: 'Native Fetch API', color: 'blue' }

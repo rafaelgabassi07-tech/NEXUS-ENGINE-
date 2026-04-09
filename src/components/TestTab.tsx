@@ -89,7 +89,7 @@ export function TestTab() {
       className="space-y-5"
     >
       <div>
-        <h2 className="text-3xl font-bold tracking-tight font-display text-white">Testar Nexus Engine <span className="text-xs font-normal text-slate-500 opacity-50">v3.1.0</span></h2>
+        <h2 className="text-3xl font-bold tracking-tight font-display text-white">Testar Nexus Engine <span className="text-xs font-normal text-slate-500 opacity-50">v9.0.0</span></h2>
         <p className="text-slate-400 mt-2">Execute testes de extração em tempo real contra a infraestrutura Nexus.</p>
       </div>
 
@@ -102,7 +102,7 @@ export function TestTab() {
           <div>
             <h3 className="text-xl font-bold font-display text-white mb-2">Como funciona o teste?</h3>
             <p className="text-sm text-slate-400 leading-relaxed mb-5 max-w-3xl">
-              Ao clicar em "Executar Scraper", o Nexus Engine v3.1 irá disparar a Orquestração Híbrida. Ele consulta múltiplas fontes em paralelo, deduplica requisições idênticas e usa o Radar Heurístico para extrair dados mesmo sob mudanças de layout. 
+              Ao clicar em "Executar Scraper", o Nexus Engine v9.0-Ultra irá disparar a Orquestração Híbrida. Ele consulta múltiplas fontes em paralelo, deduplica requisições idênticas e usa o Radar Heurístico para extrair dados mesmo sob mudanças de layout. 
               O parser SAX (Zero-AST) garante que a memória permaneça constante enquanto o Early Abort economiza até 85% de banda.
             </p>
             <div className="flex flex-wrap gap-3">

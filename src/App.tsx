@@ -76,7 +76,7 @@ function Header() {
           </div>
           <div className="flex flex-col">
             <span className="text-lg font-bold tracking-tight font-display text-white group-hover:text-blue-400 transition-colors">Nexus Engine</span>
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest -mt-1">Ultra v3.1</span>
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest -mt-1">Ultra v9.0</span>
           </div>
         </Link>
         
@@ -152,7 +152,7 @@ export default function App() {
           <Route path="/faq" element={<FAQPage />} />
         </Routes>
         <footer className="border-t border-slate-800/50 py-8 text-center text-slate-500 text-sm">
-          <p>Nexus Engine Ultra v3.1 &copy; 2026. Construído para alta performance.</p>
+          <p>Nexus Engine Ultra v9.0 &copy; 2026. Construído para alta performance.</p>
         </footer>
       </div>
     </BrowserRouter>

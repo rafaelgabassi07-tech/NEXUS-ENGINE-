@@ -43,7 +43,7 @@ interface YahooQuoteData {
   trailingPE?: number; priceToBook?: number; bookValue?: number;
   epsTrailingTwelveMonths?: number; trailingAnnualDividendYield?: number;
   marketCap?: number; profitMargins?: number; returnOnEquity?: number;
-  revenuePerShare?: number;
+  revenuePerShare?: number; symbol?: string;
 }
 
 interface CacheEntry { data: FetchAtivoResult; timestamp: number; }
@@ -138,28 +138,31 @@ async function fetchWithTimeout(url: string, timeoutMs = 5000): Promise<Response
 const YAHOO_HOSTS = ['query1', 'query2'];
 
 async function yahooQuote(ticker: string): Promise<YahooQuoteData> {
-  const symbol = `${ticker}.SA`;
-  for (const host of YAHOO_HOSTS) {
-    try {
-      const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d&includePrePost=false`;
-      const res = await fetchWithTimeout(url, 5000);
-      if (!res.ok) continue;
-      const json = await res.json();
-      const meta = json?.chart?.result?.[0]?.meta;
-      if (!meta) continue;
-      return {
-        regularMarketPrice: meta.regularMarketPrice,
-        regularMarketChangePercent: meta.chartPreviousClose
-          ? ((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100
-          : undefined,
-        trailingPE: meta.trailingPE,
-        priceToBook: meta.priceToBook,
-        bookValue: meta.bookValue,
-        epsTrailingTwelveMonths: meta.epsTrailingTwelveMonths,
-        trailingAnnualDividendYield: meta.trailingAnnualDividendYield,
-        marketCap: meta.marketCap,
-      };
-    } catch { continue; }
+  const symbols = [`${ticker}.SA`, ticker.toUpperCase()];
+  for (const symbol of symbols) {
+    for (const host of YAHOO_HOSTS) {
+      try {
+        const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d&includePrePost=false`;
+        const res = await fetchWithTimeout(url, 5000);
+        if (!res.ok) continue;
+        const json = await res.json();
+        const meta = json?.chart?.result?.[0]?.meta;
+        if (!meta) continue;
+        return {
+          symbol,
+          regularMarketPrice: meta.regularMarketPrice,
+          regularMarketChangePercent: meta.chartPreviousClose
+            ? ((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100
+            : undefined,
+          trailingPE: meta.trailingPE,
+          priceToBook: meta.priceToBook,
+          bookValue: meta.bookValue,
+          epsTrailingTwelveMonths: meta.epsTrailingTwelveMonths,
+          trailingAnnualDividendYield: meta.trailingAnnualDividendYield,
+          marketCap: meta.marketCap,
+        };
+      } catch { continue; }
+    }
   }
   throw new Error(`Yahoo indisponível para ${ticker}`);
 }
@@ -647,9 +650,12 @@ export class NexusEngineUltra {
     ticker: string, url: string, preset: ExtendedAssetPreset, type: ExtendedAssetType, log: (m: string) => void
   ): Promise<FetchSuccess> {
     const startTime = performance.now();
+    const startCpu = process.cpuUsage();
     let finalResults: ResultMap = {};
     const sourcesUsed: Set<string> = new Set();
     let bytesTotal = 0;
+    let totalCpuMs = 0;
+    let maxMemMb = 0;
 
     const customTemplate: CustomTemplate = {
       rules: preset.labels.map(l => ({ name: l, type: 'number' as DataType })),
@@ -678,6 +684,8 @@ export class NexusEngineUltra {
     if (i10Result) {
       finalResults = { ...i10Result.results };
       bytesTotal += i10Result.metrics.bytesProcessed;
+      totalCpuMs += i10Result.metrics.cpuUsageMs || 0;
+      maxMemMb = Math.max(maxMemMb, i10Result.metrics.estimatedMemoryMb || 0);
       if (Object.keys(finalResults).length > 0) {
         sourcesUsed.add('Investidor10');
         this._cb.registrarSucesso(cbI10);
@@ -721,6 +729,8 @@ export class NexusEngineUltra {
           customTemplate.htmlClasses = preset.htmlClasses['statusInvest'];
           const r15 = await this._executeFetchWithRetry(urlSI, customTemplate, 'statusInvest', 1, startTime, log, ticker);
           bytesTotal += r15.metrics.bytesProcessed;
+          totalCpuMs += r15.metrics.cpuUsageMs || 0;
+          maxMemMb = Math.max(maxMemMb, r15.metrics.estimatedMemoryMb || 0);
           let siAdded = 0;
           for (const [k, v] of Object.entries(r15.results)) {
             if (finalResults[k as AssetLabel] === undefined) { finalResults[k as AssetLabel] = v; siAdded++; }
@@ -737,6 +747,8 @@ export class NexusEngineUltra {
     const foundKeys = Object.keys(validatedResults) as AssetLabel[];
     if (foundKeys.length === 0) throw new Error(`Falha total em todas as fontes para ${ticker}.`);
 
+    const endCpu = process.cpuUsage(startCpu);
+
     return {
       results: validatedResults,
       metrics: {
@@ -744,6 +756,8 @@ export class NexusEngineUltra {
         foundKeys, earlyAbort: foundKeys.length >= preset.labels.length,
         successRate: foundKeys.length / preset.labels.length,
         source: Array.from(sourcesUsed).join(' + ') as DataSource,
+        estimatedMemoryMb: maxMemMb || (bytesTotal * 0.1) / (1024 * 1024),
+        cpuUsageMs: totalCpuMs || (endCpu.user + endCpu.system) / 1000
       },
     };
   }
@@ -817,6 +831,7 @@ export class NexusEngineUltra {
     let radarAguardando: LabelRule | null = null;
     let passosPosRadar = 0;
 
+    const startCpu = process.cpuUsage();
     const parser = new Parser({
       onopentag(name, attr) {
         if (radarAguardando) passosPosRadar++;
@@ -930,6 +945,8 @@ export class NexusEngineUltra {
       radarAguardando = null;
     }
 
+    const endCpu = process.cpuUsage(startCpu);
+
     return {
       results,
       metrics: {
@@ -939,6 +956,8 @@ export class NexusEngineUltra {
         successRate:   rules.length > 0 ? foundCount / rules.length : 0,
         earlyAbort:    foundCount >= rules.length,
         source:        source as DataSource,
+        estimatedMemoryMb: (bytesProcessed * 0.8) / (1024 * 1024),
+        cpuUsageMs: (endCpu.user + endCpu.system) / 1000
       },
     };
   }
@@ -1034,6 +1053,23 @@ export class NexusEngineUltra {
       inFlightRequests: this._inFlight.size,
       urlInFlightRequests: this._urlInFlight.size,
       ruleMapCacheSize: _ruleMapCache.size,
+    };
+  }
+
+  static getDetailedReport() {
+    return {
+      engine: 'Nexus Engine Ultra v9.0',
+      status: 'Operational',
+      capabilities: [
+        'SAX Streaming Parsing (Zero-AST)',
+        'Early Abort (Connection cutting)',
+        'Parallel Source Orchestration',
+        'Circuit Breaker per Source',
+        'LRU Multi-level Caching',
+        'Deduplication of In-flight Requests',
+        'Smart Fallback Asset Inference'
+      ],
+      metrics: this.getCacheStats()
     };
   }
 }

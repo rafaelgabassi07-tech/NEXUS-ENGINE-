@@ -80,6 +80,8 @@ export interface FetchMetrics {
   successRate:    number;
   earlyAbort:     boolean;
   source:         DataSource;
+  estimatedMemoryMb?: number;
+  cpuUsageMs?:        number;
 }
 
 export interface FetchSuccess {
