@@ -24,9 +24,8 @@ function normalize(raw: string): number | string {
 }
 
 export async function runLegacyScraper(tickers: string[]): Promise<FetchAtivoResult[]> {
-  const results: FetchAtivoResult[] = [];
-
-  for (const ticker of tickers) {
+  // Executa em paralelo para evitar Timeout do Servidor (504)
+  return Promise.all(tickers.map(async (ticker) => {
     const startTime = performance.now();
     const cleanTicker = ticker.trim().toUpperCase();
     let bytesProcessed = 0;
@@ -38,7 +37,10 @@ export async function runLegacyScraper(tickers: string[]): Promise<FetchAtivoRes
       logs.push(`[Legacy] Fetching Investidor10 for ${cleanTicker}...`);
       const urlI10 = `https://investidor10.com.br/acoes/${cleanTicker.toLowerCase()}/`;
       const resI10 = await fetch(urlI10, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+        headers: { 
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml'
+        },
         signal: AbortSignal.timeout(8000)
       });
       
@@ -66,7 +68,10 @@ export async function runLegacyScraper(tickers: string[]): Promise<FetchAtivoRes
         logs.push(`[Legacy] Fetching StatusInvest for ${cleanTicker}...`);
         const urlSI = `https://statusinvest.com.br/acoes/${cleanTicker.toLowerCase()}/`;
         const resSI = await fetch(urlSI, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+          headers: { 
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml'
+          },
           signal: AbortSignal.timeout(8000)
         });
         
@@ -88,7 +93,7 @@ export async function runLegacyScraper(tickers: string[]): Promise<FetchAtivoRes
         });
       }
 
-      results.push({
+      return {
         ticker: cleanTicker,
         results: resultMap,
         cacheStatus: 'MISS',
@@ -101,17 +106,15 @@ export async function runLegacyScraper(tickers: string[]): Promise<FetchAtivoRes
           successRate: Object.keys(resultMap).length / LABELS.length,
           source: 'Investidor10 + StatusInvest (Legacy)'
         }
-      });
+      };
 
     } catch (error: any) {
-      results.push({
+      return {
         ticker: cleanTicker,
         error: error.message,
         cacheStatus: 'ERROR',
         logs: [...logs, `[Legacy] Error: ${error.message}`]
-      });
+      };
     }
-  }
-
-  return results;
+  }));
 }

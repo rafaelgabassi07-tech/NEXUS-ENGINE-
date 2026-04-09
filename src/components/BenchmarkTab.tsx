@@ -12,6 +12,7 @@ export function BenchmarkTab() {
   const [testSize, setTestSize] = useState(5);
   const [pastedCode, setPastedCode] = useState('');
   const [analysis, setAnalysis] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchStats = async () => {
     try {
@@ -31,6 +32,7 @@ export function BenchmarkTab() {
   const runBenchmark = async () => {
     setIsRunning(true);
     setResults(null);
+    setError(null);
     const startTime = performance.now();
     
     try {
@@ -68,8 +70,9 @@ export function BenchmarkTab() {
         });
       }
       fetchStats();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      setError(error.message || "Ocorreu um erro desconhecido.");
     } finally {
       setIsRunning(false);
     }
@@ -78,6 +81,7 @@ export function BenchmarkTab() {
   const runRace = async () => {
     setIsRunning(true);
     setRaceResults(null);
+    setError(null);
     try {
       const allTickers = ['PETR4', 'VALE3', 'ITUB4', 'BBDC4', 'ABEV3'];
       const tickers = allTickers.slice(0, testSize);
@@ -117,8 +121,9 @@ export function BenchmarkTab() {
         },
         tickers
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      setError(error.message || "Ocorreu um erro desconhecido.");
     } finally {
       setIsRunning(false);
     }
@@ -205,6 +210,13 @@ export function BenchmarkTab() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 glass rounded-3xl border border-slate-800/50 p-6 shadow-2xl card-shadow min-h-[400px]">
           
+          {error && (
+            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm mb-6 flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+              <p>{error}</p>
+            </div>
+          )}
+
           {/* TAB: TESTE DE CARGA */}
           {activeTab === 'load' && (
             <>
