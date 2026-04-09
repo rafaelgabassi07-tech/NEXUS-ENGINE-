@@ -412,7 +412,7 @@ export class NexusEngineUltra {
     cacheMaxMs:              24 * 60 * 60 * 1_000,
     cacheMaxSize:            200,
     searchCacheTtlMs:        60 * 1_000,
-    watchdogMs:              4_000,
+    watchdogMs:              8_000,
     maxRetries:              2,
     concurrencyLimit:        5,
     proxy:                   '',

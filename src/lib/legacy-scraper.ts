@@ -38,7 +38,8 @@ export async function runLegacyScraper(tickers: string[]): Promise<FetchAtivoRes
       logs.push(`[Legacy] Fetching Investidor10 for ${cleanTicker}...`);
       const urlI10 = `https://investidor10.com.br/acoes/${cleanTicker.toLowerCase()}/`;
       const resI10 = await fetch(urlI10, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+        signal: AbortSignal.timeout(8000)
       });
       
       if (!resI10.ok) throw new Error(`I10 HTTP ${resI10.status}`);
@@ -65,7 +66,8 @@ export async function runLegacyScraper(tickers: string[]): Promise<FetchAtivoRes
         logs.push(`[Legacy] Fetching StatusInvest for ${cleanTicker}...`);
         const urlSI = `https://statusinvest.com.br/acoes/${cleanTicker.toLowerCase()}/`;
         const resSI = await fetch(urlSI, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+          signal: AbortSignal.timeout(8000)
         });
         
         if (!resSI.ok) throw new Error(`SI HTTP ${resSI.status}`);

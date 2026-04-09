@@ -45,6 +45,11 @@ export function BenchmarkTab() {
         body: JSON.stringify({ tickers, type: 'ACAO', includeNews: false })
       });
       
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Erro do Servidor (${res.status}): ${text.slice(0, 100)}`);
+      }
+      
       const data = await res.json();
       const endTime = performance.now();
       
@@ -82,6 +87,11 @@ export function BenchmarkTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tickers })
       });
+      
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Erro do Servidor (${res.status}): ${text.slice(0, 100)}`);
+      }
       
       const data = await res.json();
       
