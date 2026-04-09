@@ -85,11 +85,11 @@ export default function HomePage() {
 
   const handleDownload = () => {
     try {
-      const blob = new Blob([nexusCode], { type: 'application/typescript;charset=utf-8' });
+      const blob = new Blob([nexusCode], { type: 'text/javascript;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', 'nexus-engine.ts');
+      link.setAttribute('download', 'nexus-engine.js');
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -97,8 +97,8 @@ export default function HomePage() {
     } catch (error) {
       console.error('Download failed:', error);
       const a = document.createElement('a');
-      a.href = 'data:application/typescript;charset=utf-8,' + encodeURIComponent(nexusCode);
-      a.download = 'nexus-engine.ts';
+      a.href = 'data:text/javascript;charset=utf-8,' + encodeURIComponent(nexusCode);
+      a.download = 'nexus-engine.js';
       a.click();
     }
   };
