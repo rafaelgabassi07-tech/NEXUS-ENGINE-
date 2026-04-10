@@ -98,3 +98,25 @@
 .animate-float {
   animation: float 6s ease-in-out infinite;
 }
+
+/* Remove focus outline from charts and SVGs to prevent visual anomalies on click */
+.recharts-wrapper:focus,
+.recharts-surface:focus,
+.recharts-container:focus,
+.recharts-wrapper *,
+.recharts-responsive-container:focus,
+svg:focus,
+svg *,
+[tabindex]:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Specific fix for Recharts accessibility focus ring */
+.recharts-layer:focus,
+.recharts-sector:focus,
+.recharts-curve:focus,
+.recharts-rectangle:focus {
+  outline: none !important;
+}

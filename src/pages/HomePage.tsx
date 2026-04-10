@@ -2,6 +2,9 @@ import { useState, useEffect, type MouseEvent } from 'react';
 import { Activity, Play, Zap, Code2, Globe, BarChart3, ChevronDown, ChevronUp, Copy, ArrowUp, Download } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+// Importamos o código real do motor como texto bruto (raw) usando o recurso do Vite.
+// Isso garante que qualquer alteração no arquivo 'nexus-core.ts' seja refletida 
+// automaticamente no site (download e exibição) sem necessidade de atualização manual.
 import nexusCode from '../lib/nexus-core.ts?raw';
 import { ArchitectureTab } from '../components/ArchitectureTab';
 import { InfoTab } from '../components/InfoTab';
@@ -85,7 +88,8 @@ export default function HomePage() {
 
   const handleDownload = () => {
     try {
-      const blob = new Blob([nexusCode], { type: 'text/javascript;charset=utf-8' });
+      // Usamos 'text/plain' para garantir compatibilidade e .ts para refletir o código real.
+      const blob = new Blob(['\ufeff', nexusCode], { type: 'text/plain;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -97,7 +101,7 @@ export default function HomePage() {
     } catch (error) {
       console.error('Download failed:', error);
       const a = document.createElement('a');
-      a.href = 'data:text/javascript;charset=utf-8,' + encodeURIComponent(nexusCode);
+      a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(nexusCode);
       a.download = 'nexus-engine.js';
       a.click();
     }
@@ -195,34 +199,63 @@ export default function HomePage() {
       </section>
 
       {/* Statistics Section */}
-      <section id="stats" className="w-full max-w-[1920px] mx-auto px-2 sm:px-4 py-16 border-t border-white/5 relative scroll-mt-24">
-        <div className="grid grid-cols-2 gap-4 relative z-10 max-w-2xl mx-auto">
-          {[
-            { label: 'Concorrência', value: '5 reqs/lote', icon: <Globe className="w-5 h-5" />, color: 'blue' },
-            { label: 'Parser HTML', value: 'Zero-AST', icon: <Zap className="w-5 h-5" />, color: 'emerald' },
-            { label: 'Resiliência', value: 'Até 2x', icon: <Activity className="w-5 h-5" />, color: 'blue' },
-            { label: 'Memória', value: 'O(1)', icon: <BarChart3 className="w-5 h-5" />, color: 'indigo' }
-          ].map((stat, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 20 }}
+      <section id="stats" className="w-full max-w-[1920px] mx-auto px-4 py-24 border-t border-white/5 relative scroll-mt-24 overflow-hidden">
+        {/* Background Glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-blue-600/5 blur-[120px] rounded-full pointer-events-none"></div>
+        
+        <div className="max-w-5xl mx-auto relative z-10">
+          <div className="text-center mb-16">
+            <motion.h2 
+              initial={{ opacity: 0, y: 15 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.05 }}
-              className="glass-dark border border-white/5 p-6 rounded-3xl group hover:bg-slate-900/40 transition-all card-hover flex flex-col items-center justify-center text-center aspect-square sm:aspect-auto sm:min-h-[160px]"
+              className="text-2xl md:text-4xl font-bold font-display text-white mb-4 tracking-tight"
             >
-              <div className={cn(
-                "w-10 h-10 rounded-xl mb-4 flex items-center justify-center border transition-all group-hover:scale-110",
-                stat.color === 'blue' ? "bg-blue-500/10 border-blue-500/20 text-blue-400" :
-                stat.color === 'emerald' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" :
-                "bg-indigo-500/10 border-indigo-500/20 text-indigo-400"
-              )}>
-                {stat.icon}
-              </div>
-              <p className="text-xl sm:text-2xl font-bold text-white font-display mb-1 tracking-tight">{stat.value}</p>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{stat.label}</p>
-            </motion.div>
-          ))}
+              Arquitetura de Próxima Geração
+            </motion.h2>
+            <motion.p 
+              initial={{ opacity: 0, y: 15 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="text-slate-400 max-w-2xl mx-auto text-sm sm:text-base font-light"
+            >
+              O Nexus Engine redefine os limites da extração de dados com uma stack otimizada para latência zero e consumo mínimo de recursos.
+            </motion.p>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            {[
+              { label: 'Concorrência', value: '5 reqs/lote', desc: 'Processamento paralelo otimizado.', icon: <Globe className="w-5 h-5" />, color: 'blue' },
+              { label: 'Parser HTML', value: 'Zero-AST', desc: 'Extração via Lexer sem árvore DOM.', icon: <Zap className="w-5 h-5" />, color: 'emerald' },
+              { label: 'Resiliência', value: 'Até 2x', desc: 'Circuit Breakers e Retries inteligentes.', icon: <Activity className="w-5 h-5" />, color: 'blue' },
+              { label: 'Memória', value: 'O(1)', desc: 'Consumo constante independente do tamanho.', icon: <BarChart3 className="w-5 h-5" />, color: 'indigo' }
+            ].map((stat, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="group relative"
+              >
+                <div className="absolute -inset-0.5 bg-gradient-to-b from-white/10 to-transparent rounded-[2rem] opacity-0 group-hover:opacity-100 transition-opacity blur-sm"></div>
+                <div className="relative glass-dark border border-white/5 p-6 sm:p-8 rounded-[2rem] flex flex-col items-center text-center h-full hover:bg-slate-900/60 transition-all duration-500">
+                  <div className={cn(
+                    "w-12 h-12 rounded-2xl mb-6 flex items-center justify-center border transition-all duration-500 group-hover:scale-110 group-hover:rotate-3",
+                    stat.color === 'blue' ? "bg-blue-500/10 border-blue-500/20 text-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.1)]" :
+                    stat.color === 'emerald' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.1)]" :
+                    "bg-indigo-500/10 border-indigo-500/20 text-indigo-400 shadow-[0_0_20px_rgba(99,102,241,0.1)]"
+                  )}>
+                    {stat.icon}
+                  </div>
+                  <p className="text-2xl sm:text-3xl font-black text-white font-display mb-2 tracking-tighter">{stat.value}</p>
+                  <p className="text-[10px] sm:text-[11px] text-blue-400/80 font-bold uppercase tracking-[0.2em] mb-3">{stat.label}</p>
+                  <p className="text-[11px] text-slate-500 leading-relaxed font-medium">{stat.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -260,10 +293,10 @@ export default function HomePage() {
               <button 
                 onClick={handleDownload}
                 className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded-lg flex items-center gap-1.5 transition-all shadow-lg shadow-blue-900/20 active:scale-95 group"
-                title="Baixar arquivo .ts completo"
+                title="Baixar arquivo .js completo"
               >
                 <Download className="w-3.5 h-3.5 group-hover:animate-bounce" />
-                Baixar Engine (.ts)
+                Baixar Engine (.js)
               </button>
               <button 
                 onClick={() => {

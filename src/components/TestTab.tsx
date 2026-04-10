@@ -89,7 +89,7 @@ export function TestTab() {
       className="space-y-5"
     >
       <div>
-        <h2 className="text-3xl font-bold tracking-tight font-display text-white">Testar Nexus Engine <span className="text-xs font-normal text-slate-500 opacity-50">v9.0.0</span></h2>
+        <h2 className="text-3xl font-bold tracking-tight font-display text-white">Testar Nexus Engine <span className="text-xs font-normal text-slate-500 opacity-50">v12.0-Ultra</span></h2>
         <p className="text-slate-400 mt-2">Execute testes de extração em tempo real contra a infraestrutura Nexus.</p>
       </div>
 
@@ -99,7 +99,7 @@ export function TestTab() {
             <h3 className="text-lg font-bold font-display text-white">Configuração</h3>
             <div className="flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full">
               <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Nexus v9.0-Ultra</span>
+              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Nexus v12.0-Ultra</span>
             </div>
           </div>
           

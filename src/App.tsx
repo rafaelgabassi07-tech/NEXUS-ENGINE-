@@ -1,6 +1,6 @@
 import { useState, useEffect, type MouseEvent } from 'react';
 import { BrowserRouter, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Activity, Settings, MessageCircleQuestion, Menu, X } from 'lucide-react';
+import { Focus, Settings, MessageCircleQuestion, Menu, X } from 'lucide-react';
 import { cn } from './lib/utils';
 import { AnimatePresence, motion } from 'motion/react';
 import HomePage from './pages/HomePage';
@@ -72,11 +72,11 @@ function Header() {
       <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3 group cursor-pointer">
           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
-            <Activity className="w-6 h-6 text-white" />
+            <Focus className="w-6 h-6 text-white" />
           </div>
           <div className="flex flex-col">
             <span className="text-lg font-bold tracking-tight font-display text-white group-hover:text-blue-400 transition-colors">Nexus Engine</span>
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest -mt-1">Ultra v9.0</span>
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest -mt-1">Ultra v10.1</span>
           </div>
         </Link>
         
@@ -152,7 +152,7 @@ export default function App() {
           <Route path="/faq" element={<FAQPage />} />
         </Routes>
         <footer className="border-t border-slate-800/50 py-8 text-center text-slate-500 text-sm">
-          <p>Nexus Engine Ultra v9.0 &copy; 2026. Construído para alta performance.</p>
+          <p>Nexus Engine Ultra v10.1 &copy; 2026. Construído para alta performance.</p>
         </footer>
       </div>
     </BrowserRouter>

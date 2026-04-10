@@ -23,13 +23,14 @@ export function InfoTab({ nexusCode }: InfoTabProps) {
   const handleDownload = () => {
     try {
       // Usamos 'text/plain' para garantir que dispositivos móveis consigam abrir como texto,
-      // mas usamos a extensão .ts para refletir o código real (TypeScript).
+      // mas usamos a extensão .js para garantir que o arquivo seja reconhecido como código JavaScript,
+      // evitando que o sistema operacional o identifique erroneamente como vídeo (.ts).
       // Adicionamos o BOM (\ufeff) para ajudar editores a reconhecerem a codificação UTF-8.
       const blob = new Blob(['\ufeff', nexusCode], { type: 'text/plain;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', 'nexus-engine.ts');
+      link.setAttribute('download', 'nexus-engine.js');
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -39,7 +40,7 @@ export function InfoTab({ nexusCode }: InfoTabProps) {
       // Fallback simples
       const a = document.createElement('a');
       a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(nexusCode);
-      a.download = 'nexus-engine.ts';
+      a.download = 'nexus-engine.js';
       a.click();
     }
   };
@@ -81,16 +82,16 @@ const batch = await runNexusBatch(['VALE3', 'ITUB4'], 'ACAO');`;
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight font-display text-white">Documentação</h2>
-          <p className="text-slate-400 mt-1 text-sm font-light">Guia de integração Nexus Engine 10.1-Ultra.</p>
+          <p className="text-slate-400 mt-1 text-sm font-light">Guia de integração Nexus Engine 12.0-Ultra.</p>
         </div>
         <div className="flex items-center gap-2">
           <button 
             onClick={handleDownload} 
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-blue-900/20 active:scale-95 group"
-            title="Baixar arquivo .ts"
+            title="Baixar arquivo .js"
           >
             <Download className="w-4 h-4 group-hover:animate-bounce" />
-            Engine TS
+            Engine JS
           </button>
           <button 
             onClick={handleCopyCode} 
@@ -102,7 +103,7 @@ const batch = await runNexusBatch(['VALE3', 'ITUB4'], 'ACAO');`;
           </button>
           <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-indigo-600/10 border border-indigo-500/20 rounded-xl">
             <Code2 className="w-4 h-4 text-indigo-400" />
-            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">v2.0-Stable</span>
+            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">v12.0-Ultra</span>
           </div>
         </div>
       </div>

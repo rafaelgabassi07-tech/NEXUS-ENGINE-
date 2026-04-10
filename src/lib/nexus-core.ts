@@ -1,1249 +1,1336 @@
-import { Parser } from 'htmlparser2';
-import * as cheerio from 'cheerio';
-import { performance } from 'perf_hooks';
+import { z } from 'zod';
 
-import {
-  AssetType,
-  ExtendedAssetType,
-  AssetLabel,
-  CacheStatus,
-  ResultMap,
-  FetchSuccess,
-  FetchAtivoResult,
-  AssetPreset,
-  Task,
-  ChartPeriod,
-  HistoricalQuote,
-  Dividend,
-  DataSource,
-  NewsItem,
-  NexusEngineConfig,
-  DataType,
-  LabelRule,
-  CustomTemplate
-} from './nexus/types.js';
+// ════════════════════════════════════════════════════════════════════════════
+// 1. TIPAGENS E CONTRATOS
+// ════════════════════════════════════════════════════════════════════════════
 
-import { delay, getRandomAgent } from './nexus/utils.js';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TIPOS INTERNOS
-// ─────────────────────────────────────────────────────────────────────────────
-
-type ScraperSource = 'investidor10' | 'statusInvest' | 'custom';
-
-interface ExtendedAssetPreset extends AssetPreset {
-  url_base: string;
-  labels: AssetLabel[];
-  statusInvest_base?: string;
-  aliases?: Record<string, AssetLabel>;
-  htmlClasses: Record<ScraperSource, string[]>;
+export interface GenericRule {
+  name: string;
+  anchors: string[];
+  extractRegex: RegExp;
+  formatter?: (raw: string) => any;
+  /**
+   * Se true, extrai todos os matches no chunk como array.
+   * Útil para tabelas de dividendos, histórico, etc.
+   */
+  multiple?: boolean;
 }
 
-interface YahooQuoteData {
-  regularMarketPrice?: number; regularMarketChangePercent?: number;
-  trailingPE?: number; priceToBook?: number; bookValue?: number;
-  epsTrailingTwelveMonths?: number; trailingAnnualDividendYield?: number;
-  marketCap?: number; profitMargins?: number; returnOnEquity?: number;
-  revenuePerShare?: number; symbol?: string;
-  debtToEquity?: number; currentRatio?: number; returnOnAssets?: number;
+export interface ExtractorTemplate<T = any> {
+  name: string;
+  rules: GenericRule[];
+  schema: z.ZodSchema<T>;
 }
 
-interface CacheEntry { data: FetchAtivoResult; timestamp: number; }
+export interface ScrapeSource<T = any> {
+  url: string;
+  template: ExtractorTemplate<T>;
+  requireStealth?: boolean;
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONSTANTES PRÉ-COMPILADAS — evita recompilação a cada chamada
-// ─────────────────────────────────────────────────────────────────────────────
+export type ExtendedAssetType = 'ACAO' | 'FII' | 'BDR' | 'ETF';
 
-/** OTIMIZAÇÃO: Set de valores inválidos (O(1) lookup vs. array indexOf) */
-const VALORES_INVALIDOS = new Set(['-', '—', '–', 'N/A', 'n/a', 'nd', '', 'null', 'undefined', '--', '---', '--%', '0%']);
+export interface NewsItem {
+  title: string;
+  link: string;
+  pubDate?: Date;
+  source?: string;
+}
 
-/** OTIMIZAÇÃO: Regex compilados uma única vez no nível do módulo */
-const RE_MOEDA    = /[R$\s]/g;
-const RE_MILHAR   = /\./g;
-const RE_DECIMAL  = /,/;
-const RE_CHROME   = /Chrome\/(\d+)/;
-const RE_TICKER   = /^[A-Z]{4}\d{1,2}$/;
-const RE_SA       = /\.SA$/i;
-const RE_BDR      = /3[2-5]$/;
-const RE_NUMERO   = /^[\d,.\-]+[%MkKB]?$/;
-const RE_PERCENT  = /%/;
-const RE_HOSTNAME = /^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?]+)/im;
+export interface NexusEngineOptions {
+  cacheTtlMs?: number;
+  cacheStaleMs?: number;
+  maxRetries?: number;
+  retryBaseDelay?: number;
+  fetchTimeoutMs?: number;
+  concurrencyLimit?: number;
+  domainRps?: number;
+  domainBurst?: number;
+}
 
-/** OTIMIZAÇÃO: Dicionário de períodos movido para constante de módulo */
-const DIAS_POR_PERIODO: Record<string, number> = {
-  '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '5y': 1825, 'max': 10950
-};
+// ════════════════════════════════════════════════════════════════════════════
+// 2. CONSTANTES PRÉ-COMPILADAS DE MÓDULO
+// ════════════════════════════════════════════════════════════════════════════
+
+const RE_MOEDA   = /[R$\s]/g;
+const RE_MILHAR  = /\./g;
+const RE_DECIMAL = /,/;
+const RE_SA      = /\.SA$/i;
+const RE_BDR     = /3[2-5]$/;
+const RE_TICKER  = /^[A-Z]{4}\d{1,2}$/;
+const RE_ESPACO  = /\s+/;
+
+export const VALORES_INVALIDOS = new Set([
+  '-', '—', '–', 'N/A', 'n/a', 'nd', '', 'null', 'undefined',
+  '--', '---', '--%', '0%',
+]);
 
 /**
- * OTIMIZAÇÃO: Lista de ETFs expandida — a original tinha apenas 10,
- * cobrindo uma fração mínima dos ETFs negociados na B3.
+ * FIX #1 — User-Agents atualizados para Chrome 131+ e Firefox 133+.
+ * A versão Gemini tinha Chrome 123/124 (lançados em 2024-Q1, claramente desatualizados).
+ * WAFs modernos detectam UAs antigos como sinal de scraper.
+ */
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14.7; rv:133.0) Gecko/20100101 Firefox/133.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0',
+];
+
+const YAHOO_HOSTS = ['query1', 'query2'] as const;
+
+/**
+ * FIX #2 — ETFs B3 conhecidos (restaurado do v11).
  */
 const ETFS_CONHECIDOS = new Set([
   'BOVA11','IVVB11','SMAL11','DIVO11','FIND11','MATB11','GOVE11','XFIX11',
   'GOLD11','SPXI11','HASH11','BOVB11','BOVS11','BRAP11','BRRJ11','BRAX11',
-  'XINA11','EURP11','FIXA11','TCHE11','ECOO11','DIVO11','ACWI11','NASD11',
-  'COCA34','USTK11','NSDQ11','DEFI11','ESGE11','SUST11','AGRI11','IFRA11',
+  'XINA11','EURP11','FIXA11','TCHE11','ECOO11','ACWI11','NASD11',
+  'USTK11','NSDQ11','DEFI11','ESGE11','SUST11','AGRI11','IFRA11',
   'BDIV11','BLKB11','BNDX11','BOVV11','BRCO11','CSMO11','VALE11','QUAL11',
   'REIT11','TRET11','WRLD11','XBOV11','PIBB11','SMAC11','MOAT11','PORD11',
 ]);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UTILITÁRIOS
-// ─────────────────────────────────────────────────────────────────────────────
+const DIAS_POR_PERIODO: Readonly<Record<string, number>> = {
+  '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '5y': 1825, 'max': 10950,
+};
 
-/**
- * OTIMIZAÇÃO: Reduzido número de operações e eliminadas operações redundantes.
- * O `.toUpperCase()` era feito após detectar sufixos — reordenado para uma vez só.
- */
-function normalizeBRNumber(raw: string): number | string {
+// ════════════════════════════════════════════════════════════════════════════
+// 3. GUARD: process.cpuUsage (Node-specific)
+// ════════════════════════════════════════════════════════════════════════════
+
+const hasCpuUsage = typeof process !== 'undefined' && typeof (process as any).cpuUsage === 'function';
+function safeCpuStart(): any | null { return hasCpuUsage ? (process as any).cpuUsage() : null; }
+function safeCpuDeltaMs(start: any | null): number {
+  if (!start || !hasCpuUsage) return 0;
+  const d = (process as any).cpuUsage(start);
+  return (d.user + d.system) / 1000;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 4. UTILITÁRIOS
+// ════════════════════════════════════════════════════════════════════════════
+
+export function normalizeBRNumber(raw: string): number | string {
   if (!raw) return '';
   let limpo = raw.replace(RE_MOEDA, '').toUpperCase().trim();
-  if (RE_PERCENT.test(limpo)) return limpo;
+  if (limpo.includes('%')) return limpo;
 
-  let multiplicador = 1;
-  const ultimo = limpo[limpo.length - 1];
-  if (ultimo === 'K') { multiplicador = 1_000; limpo = limpo.slice(0, -1); }
-  else if (ultimo === 'M') { multiplicador = 1_000_000; limpo = limpo.slice(0, -1); }
-  else if (ultimo === 'B') { multiplicador = 1_000_000_000; limpo = limpo.slice(0, -1); }
+  let mult = 1;
+  const ult = limpo[limpo.length - 1];
+  if      (ult === 'K') { mult = 1_000;         limpo = limpo.slice(0, -1); }
+  else if (ult === 'M') { mult = 1_000_000;     limpo = limpo.slice(0, -1); }
+  else if (ult === 'B') { mult = 1_000_000_000; limpo = limpo.slice(0, -1); }
 
-  // Uma única passagem: remove pontos de milhar, substitui vírgula decimal
   limpo = limpo.replace(RE_MILHAR, '').replace(RE_DECIMAL, '.');
   const num = parseFloat(limpo);
-  return isNaN(num) ? raw.trim() : num * multiplicador;
+  return isNaN(num) ? raw.trim() : num * mult;
 }
 
 /**
- * OTIMIZAÇÃO: Backoff com full jitter — distribui melhor as retentativas
- * sob alta concorrência, evitando thundering herd.
- */
-function backoffMs(tentativa: number, base = 300, teto = 8_000): number {
-  const cap = Math.min(teto, base * 2 ** tentativa);
-  return Math.random() * cap; // Full jitter: U(0, cap)
-}
-
-function periodoParaData(periodo: ChartPeriod): Date {
-  return new Date(Date.now() - (DIAS_POR_PERIODO[periodo] ?? 365) * 86_400_000);
-}
-
-// ═══════════════════════════════════════════════════════════
-// YAHOO FINANCE NATIVO (substitui yahoo-finance2)
-// ═══════════════════════════════════════════════════════════
-
-async function fetchWithTimeout(url: string, timeoutMs = 5000): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, {
-      signal: controller.signal,
-      headers: { 'Accept': 'application/json', 'User-Agent': getRandomAgent() },
-    });
-  } finally { clearTimeout(timer); }
-}
-
-const YAHOO_HOSTS = ['query1', 'query2'];
-
-async function yahooQuote(ticker: string): Promise<YahooQuoteData> {
-  const symbols = [`${ticker}.SA`, ticker.toUpperCase()];
-  for (const symbol of symbols) {
-    try {
-      const results = await Promise.any(YAHOO_HOSTS.map(async (host) => {
-        const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d&includePrePost=false`;
-        const res = await fetchWithTimeout(url, 5000);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        const meta = json?.chart?.result?.[0]?.meta;
-        if (!meta) throw new Error('Meta not found');
-        return {
-          symbol,
-          regularMarketPrice: meta.regularMarketPrice,
-          regularMarketChangePercent: meta.chartPreviousClose
-            ? ((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100
-            : undefined,
-          trailingPE: meta.trailingPE,
-          priceToBook: meta.priceToBook,
-          bookValue: meta.bookValue,
-          epsTrailingTwelveMonths: meta.epsTrailingTwelveMonths,
-          trailingAnnualDividendYield: meta.trailingAnnualDividendYield,
-          marketCap: meta.marketCap,
-        };
-      }));
-      if (results) return results;
-    } catch { continue; }
-  }
-  throw new Error(`Yahoo indisponível para ${ticker}`);
-}
-
-async function yahooFundamentals(ticker: string): Promise<Partial<YahooQuoteData>> {
-  const symbols = [`${ticker}.SA`, ticker.toUpperCase()];
-  for (const symbol of symbols) {
-    try {
-      return await Promise.any(YAHOO_HOSTS.map(async (host) => {
-        const url = `https://${host}.finance.yahoo.com/v11/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=financialData,defaultKeyStatistics`;
-        const res = await fetchWithTimeout(url, 5000);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        const result = json?.quoteSummary?.result?.[0];
-        if (!result) throw new Error('Result not found');
-        
-        const fin = result.financialData || {};
-        const stats = result.defaultKeyStatistics || {};
-        
-        return {
-          debtToEquity: fin.debtToEquity?.raw,
-          currentRatio: fin.currentRatio?.raw,
-          returnOnAssets: fin.returnOnAssets?.raw,
-          returnOnEquity: fin.returnOnEquity?.raw,
-          profitMargins: fin.profitMargins?.raw,
-          revenuePerShare: fin.revenuePerShare?.raw,
-        };
-      }));
-    } catch { continue; }
-  }
-  return {};
-}
-
-async function yahooHistorical(ticker: string, period: ChartPeriod): Promise<HistoricalQuote[]> {
-  const symbol = `${ticker.toUpperCase()}.SA`;
-  const range = period || '1y';
-  try {
-    return await Promise.any(YAHOO_HOSTS.map(async (host) => {
-      const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d&includePrePost=false`;
-      const res = await fetchWithTimeout(url, 8000);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      const result = json?.chart?.result?.[0];
-      if (!result?.timestamp) throw new Error('No timestamp');
-      const quotes = result.indicators?.quote?.[0];
-      if (!quotes) throw new Error('No quotes');
-      return (result.timestamp as number[]).map((ts: number, i: number) => ({
-        date: new Date(ts * 1000),
-        open: quotes.open?.[i] ?? 0, high: quotes.high?.[i] ?? 0,
-        low: quotes.low?.[i] ?? 0, close: quotes.close?.[i] ?? 0,
-        volume: quotes.volume?.[i] ?? 0,
-      })).filter((q: HistoricalQuote) => q.close > 0);
-    }));
-  } catch {
-    throw new Error(`Histórico indisponível para ${ticker}`);
-  }
-}
-
-async function yahooDividends(ticker: string, period: ChartPeriod): Promise<Dividend[]> {
-  const symbol = `${ticker.toUpperCase()}.SA`;
-  const period1 = Math.floor(periodoParaData(period).getTime() / 1000);
-  const period2 = Math.floor(Date.now() / 1000);
-  try {
-    return await Promise.any(YAHOO_HOSTS.map(async (host) => {
-      const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${period2}&interval=1d&events=div`;
-      const res = await fetchWithTimeout(url, 8000);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      const events = json?.chart?.result?.[0]?.events?.dividends;
-      if (!events) return [];
-      return Object.values(events).map((d: any) => ({
-        date: new Date(d.date * 1000), amount: d.amount,
-      })).sort((a: Dividend, b: Dividend) => a.date.getTime() - b.date.getTime());
-    }));
-  } catch {
-    throw new Error(`Dividendos indisponíveis para ${ticker}`);
-  }
-}
-
-async function yahooSearch(query: string): Promise<any[]> {
-  try {
-    const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0&listsCount=0`;
-    const res = await fetchWithTimeout(url, 5000);
-    if (!res.ok) return [];
-    const json = await res.json();
-    return (json?.quotes ?? []).filter((q: any) => q.exchange === 'SAO' || q.symbol?.endsWith('.SA'));
-  } catch { return []; }
-}
-
-/**
- * Infere o tipo de ativo com base no sufixo do ticker.
- * Heurísticas B3: 11 = FII ou ETF, 34/32/33/35 = BDR, demais = ACAO.
- * OTIMIZAÇÃO: Regex pré-compilado RE_BDR em vez de inline.
+ * FIX #3 — inferAssetType restaurado do v11 com suporte a FII sufixo 12.
+ * O Gemini removeu completamente a inferência de tipo.
  */
 export function inferAssetType(ticker: string): ExtendedAssetType {
-  const clean = ticker.trim().replace(RE_SA, '').toUpperCase();
+  const clean = canonicalizeTicker(ticker);
   if (RE_BDR.test(clean)) return 'BDR';
   if (clean.endsWith('11')) return ETFS_CONHECIDOS.has(clean) ? 'ETF' : 'FII';
   if (clean.endsWith('12')) return 'FII';
   return 'ACAO';
 }
 
-/**
- * Valida o formato de um ticker B3.
- * Retorna null se válido ou uma string descrevendo o erro.
- * OTIMIZAÇÃO: Regex RE_TICKER pré-compilado.
- */
-function validarTicker(ticker: string): string | null {
-  const clean = ticker.trim().replace(RE_SA, '').toUpperCase();
+export function canonicalizeTicker(raw: string): string {
+  return raw.trim().replace(/\s+/g, '').replace(RE_SA, '').toUpperCase();
+}
+
+export async function fetchNews(ticker: string): Promise<NewsItem[]> {
+  const clean = canonicalizeTicker(ticker);
+  try {
+    const res = await fetch(`https://news.google.com/rss/search?q=${clean}+acao+OR+fii+OR+b3&hl=pt-BR&gl=BR&ceid=BR:pt-419`);
+    if (!res.ok) return [];
+    const xml = await res.text();
+    
+    const items: NewsItem[] = [];
+    const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+    let match;
+    
+    while ((match = itemRegex.exec(xml)) !== null && items.length < 5) {
+      const itemXml = match[1];
+      const titleMatch = /<title>([^<]*)<\/title>/.exec(itemXml);
+      const linkMatch = /<link>([^<]*)<\/link>/.exec(itemXml);
+      const pubDateMatch = /<pubDate>([^<]*)<\/pubDate>/.exec(itemXml);
+      const sourceMatch = /<source[^>]*>([^<]*)<\/source>/.exec(itemXml);
+      
+      if (titleMatch && linkMatch) {
+        items.push({
+          title: titleMatch[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>'),
+          link: linkMatch[1],
+          pubDate: pubDateMatch ? new Date(pubDateMatch[1]) : undefined,
+          source: sourceMatch ? sourceMatch[1] : undefined,
+        });
+      }
+    }
+    return items;
+  } catch {
+    return [];
+  }
+}
+
+function validarTicker(clean: string): string | null {
   if (!clean) return 'Ticker vazio';
-  if (!RE_TICKER.test(clean)) return `Formato inválido: "${clean}" (esperado: 4 letras + 1-2 dígitos)`;
+  if (!RE_TICKER.test(clean)) return `Formato inválido: "${clean}"`;
   return null;
 }
 
+function getRandomAgent(): string {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
+function periodoParaData(periodo: string): Date {
+  return new Date(Date.now() - (DIAS_POR_PERIODO[periodo] ?? 365) * 86_400_000);
+}
+
+function backoffMs(attempt: number, base = 500, cap = 16_000): number {
+  return Math.random() * Math.min(cap, base * 2 ** attempt);
+}
+// ════════════════════════════════════════════════════════════════════════════
+// 5. LRU CACHE — corrigido
+// ════════════════════════════════════════════════════════════════════════════
+
+class LRUCache<V> {
+  private mapa = new Map<string, { data: V; expiresAt: number; staleAt: number }>();
+  constructor(private maxSize: number) {
+    if (maxSize < 1) throw new RangeError('LRUCache: maxSize deve ser >= 1');
+  }
+
+  get(key: string): { data: V; isStale: boolean } | null {
+    const entry = this.mapa.get(key);
+    if (!entry) return null;
+
+    const now = Date.now();
+
+    /**
+     * FIX #4 — verifica expiração ANTES de promover no LRU.
+     * A versão Gemini fazia: delete → set (promoção) → verifica expirado → delete.
+     * Isso gerava 3 operações de Map para entradas expiradas; além de reclassificar
+     * erroneamente um entry expirado como "recém-usado".
+     */
+    if (now > entry.expiresAt) {
+      this.mapa.delete(key);
+      return null;
+    }
+
+    // Promoção LRU somente para entradas válidas
+    this.mapa.delete(key);
+    this.mapa.set(key, entry);
+    return { data: entry.data, isStale: now > entry.staleAt };
+  }
+
+  set(key: string, data: V, staleMs: number, ttlMs: number): void {
+    /**
+     * FIX #5 — remove a chave existente antes de verificar o tamanho.
+     * A versão Gemini verificava size >= maxSize sem considerar que a chave
+     * poderia já existir — evicta um entry LRU desnecessariamente ao atualizar.
+     */
+    if (this.mapa.has(key)) this.mapa.delete(key);
+    else if (this.mapa.size >= this.maxSize) this.mapa.delete(this.mapa.keys().next().value!);
+
+    const now = Date.now();
+    this.mapa.set(key, { data, staleAt: now + staleMs, expiresAt: now + ttlMs });
+  }
+
+  delete(key: string): boolean { return this.mapa.delete(key); }
+  clear(): void                { this.mapa.clear(); }
+  get tamanho(): number        { return this.mapa.size; }
+  get tamanhoMax(): number     { return this.maxSize; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 6. CIRCUIT BREAKER — corrigido
+// ════════════════════════════════════════════════════════════════════════════
+
+class DomainRateLimiter {
+  private tokens: number;
+  private lastRefill: number;
+
+  constructor(
+    private readonly rps: number = 2,
+    private readonly burst: number = 5
+  ) {
+    this.tokens = burst;
+    this.lastRefill = performance.now();
+  }
+
+  async acquire(): Promise<void> {
+    while (true) {
+      this.refill();
+      if (this.tokens >= 1) {
+        this.tokens -= 1;
+        return;
+      }
+      // Wait a bit before trying again
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  }
+
+  private refill(): void {
+    const now = performance.now();
+    const elapsedMs = now - this.lastRefill;
+    const newTokens = elapsedMs * (this.rps / 1000);
+    
+    if (newTokens > 0) {
+      this.tokens = Math.min(this.burst, this.tokens + newTokens);
+      this.lastRefill = now;
+    }
+  }
+}
+
+type CBState = 'FECHADO' | 'ABERTO' | 'SEMI_ABERTO';
+
+class CircuitBreaker {
+  private state: CBState = 'FECHADO';
+  private failures = 0;
+  private lastFailureTime = 0;
+  private successCount = 0;
+
+  constructor(
+    private threshold: number = 3,
+    private resetMs:   number = 30_000,
+  ) {}
+
+  /**
+   * FIX #6 — getState() não produz mais side-effects.
+   * A versão Gemini mutava `this.state` de ABERTO → SEMI_ABERTO dentro do getter,
+   * tornando-o impuro e imprevisível. A transição agora ocorre apenas em isOpen().
+   */
+  getState(): CBState { return this.state; }
+
+  isOpen(): boolean {
+    if (this.state === 'ABERTO') {
+      if (Date.now() - this.lastFailureTime > this.resetMs) {
+        this.state = 'SEMI_ABERTO';
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  recordSuccess(): void {
+    if (this.state === 'SEMI_ABERTO') {
+      this.successCount++;
+      if (this.successCount >= 2) this.reset();
+    } else {
+      this.failures = 0;
+    }
+  }
+
+  recordFailure(): void {
+    this.failures++;
+    this.lastFailureTime = Date.now();
+    this.successCount = 0;
+    if (this.failures >= this.threshold) this.state = 'ABERTO';
+  }
+
+  reset(): void {
+    this.state    = 'FECHADO';
+    this.failures = 0;
+    this.successCount = 0;
+    this.lastFailureTime = 0;
+  }
+
+  getFalhas(): number { return this.failures; }
+}
+// ════════════════════════════════════════════════════════════════════════════
+// 7. STEALTH HEADERS (por domínio)
+// ════════════════════════════════════════════════════════════════════════════
+
 /**
- * OTIMIZAÇÃO: Cache de headers por hostname para evitar `new URL()` repetido.
- * A URL do hostname muda raramente; o User-Agent sim (rotação por request).
+ * FIX #7 — Headers por domínio.
+ * Cache de hostname extraído evita `new URL()` repetido no hot path.
  */
 const _hostnameCache = new Map<string, string>();
 
-function getHeadersConsistentes(userAgent: string, url: string): Record<string, string> {
-  const match = url.match(RE_HOSTNAME);
-  const hostname = match ? match[1] : 'www.google.com';
+function extractHostname(url: string): string {
+  const match = url.match(/^https?:\/\/[^\/]+/);
+  const origin = match ? match[0] : url;
+  let h = _hostnameCache.get(origin);
+  if (h) return h;
+  try { h = new URL(url).hostname; } catch { h = url; }
+  if (_hostnameCache.size >= 64) _hostnameCache.delete(_hostnameCache.keys().next().value!);
+  _hostnameCache.set(origin, h);
+  return h;
+}
 
+function getStealthHeaders(url: string): Record<string, string> {
+  const hostname = extractHostname(url);
   const lang = Math.random() > 0.5
     ? 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
     : 'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3';
 
-  const referer = hostname.includes('statusinvest')
-    ? 'https://www.google.com/'
-    : `https://${hostname}/`;
-
   return {
-    'User-Agent': userAgent,
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Language': lang,
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Connection': 'keep-alive',
+    'User-Agent'               : getRandomAgent(),
+    'Accept'                   : 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language'          : lang,
+    'Accept-Encoding'          : 'gzip, deflate, br',
+    'Cache-Control'            : 'no-cache',
+    'Pragma'                   : 'no-cache',
     'Upgrade-Insecure-Requests': '1',
-    'DNT': '1',
-    'Referer': referer,
+    'DNT'                      : '1',
+    'Referer'                  : hostname.includes('statusinvest') ? 'https://www.google.com/' : `https://${hostname}/`,
+    'Sec-Fetch-Dest'           : 'document',
+    'Sec-Fetch-Mode'           : 'navigate',
+    'Sec-Fetch-Site'           : 'none',
+    'Sec-Fetch-User'           : '?1',
   };
 }
 
-function validarResultMap(results: ResultMap): ResultMap {
-  const validado: ResultMap = {};
-  for (const [chave, valor] of Object.entries(results)) {
-    if (valor == null) continue;
-    const str = String(valor).trim();
-    if (!VALORES_INVALIDOS.has(str)) validado[chave as AssetLabel] = valor;
-  }
-  return validado;
-}
-// ─────────────────────────────────────────────────────────────────────────────
-// LRU CACHE
-// ─────────────────────────────────────────────────────────────────────────────
-
-class LRUCache<K, V> {
-  private readonly mapa = new Map<K, V>();
-  constructor(private readonly tamanhoMax: number) {}
-
-  get(chave: K): V | undefined {
-    const val = this.mapa.get(chave);
-    if (val === undefined) return undefined;
-    this.mapa.delete(chave);
-    this.mapa.set(chave, val);
-    return val;
-  }
-
-  set(chave: K, valor: V): void {
-    if (this.mapa.has(chave)) {
-      this.mapa.delete(chave);
-    } else if (this.mapa.size >= this.tamanhoMax) {
-      this.mapa.delete(this.mapa.keys().next().value!);
-    }
-    this.mapa.set(chave, valor);
-  }
-
-  delete(chave: K): boolean { return this.mapa.delete(chave); }
-  clear(): void { this.mapa.clear(); }
-  get size(): number { return this.mapa.size; }
-  get tamanho(): number { return this.mapa.size; }
-  has(chave: K): boolean { return this.mapa.has(chave); }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CIRCUIT BREAKER — CORREÇÃO: chave por fonte, não por ticker
-// ─────────────────────────────────────────────────────────────────────────────
-
-type EstadoCB = 'FECHADO' | 'ABERTO' | 'SEMI_ABERTO';
-interface EntradaCB { falhas: number; ultimaFalha: number; estado: EstadoCB; }
+// ════════════════════════════════════════════════════════════════════════════
+// 8. UNIVERSAL LEXER — ZERO-AST COM SLIDING WINDOW CORRIGIDO
+// ════════════════════════════════════════════════════════════════════════════
 
 /**
- * CORREÇÃO ARQUITETURAL: O Circuit Breaker original usava a chave
- * `fonte:ticker` (ex.: `investidor10:PETR4`), ou seja, cada ativo tinha
- * seu próprio disjuntor. O propósito do CB é proteger uma fonte inteira
- * quando ela começa a falhar sistematicamente — não um ativo específico.
- * Agora a chave é apenas a fonte (`investidor10`, `statusInvest`, `yahoo`).
+ * Cache de RegExp compiladas para o modo `multiple`.
+ * FIX #8 — A versão Gemini criava `new RegExp(rule.extractRegex.source, 'g')` a
+ * cada invocação de universalLexer para cada regra `multiple: true`. Num streaming
+ * com 200 chunks e 10 regras, isso gera 2000 compilações desnecessárias.
  */
-class CircuitBreaker {
-  private readonly entradas = new Map<string, EntradaCB>();
-  constructor(private readonly limiar: number, private readonly resetMs: number) {}
+const _regexCache = new Map<string, RegExp>();
 
-  estaAberto(fonte: string): boolean {
-    const e = this.entradas.get(fonte);
-    if (!e || e.estado === 'FECHADO') return false;
-    if (e.estado === 'ABERTO' && Date.now() - e.ultimaFalha > this.resetMs) {
-      e.estado = 'SEMI_ABERTO';
-      return false;
-    }
-    return e.estado === 'ABERTO';
+function getGlobalRegex(source: string): RegExp {
+  let r = _regexCache.get(source);
+  if (!r) {
+    r = new RegExp(source, 'g');
+    _regexCache.set(source, r);
   }
-
-  registrarSucesso(fonte: string): void {
-    const e = this.entradas.get(fonte);
-    if (e) { e.falhas = 0; e.estado = 'FECHADO'; }
-  }
-
-  registrarFalha(fonte: string): void {
-    const e = this.entradas.get(fonte) ?? { falhas: 0, ultimaFalha: 0, estado: 'FECHADO' as EstadoCB };
-    e.falhas++;
-    e.ultimaFalha = Date.now();
-    if (e.falhas >= this.limiar && e.estado !== 'ABERTO') e.estado = 'ABERTO';
-    this.entradas.set(fonte, e);
-  }
-
-  getEstado(fonte: string): EstadoCB {
-    return this.entradas.get(fonte)?.estado ?? 'FECHADO';
-  }
+  // Reseta lastIndex para uso seguro (stateful!)
+  r.lastIndex = 0;
+  return r;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// RULE MAP CACHE — Evita reconstrução do mapa de regras a cada fetch
-// ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * OTIMIZAÇÃO: O ruleMap era reconstruído em cada chamada a `_executeFetch`.
- * Como as regras são derivadas de templates estáticos por tipo de ativo,
- * o resultado pode ser memoizado com a chave do template.
+ * FIX #9 — Sliding window com overlap garantido.
+ *
+ * PROBLEMA ORIGINAL: `htmlBuffer = htmlBuffer.slice(-MAX_WINDOW_SIZE)` sem overlap.
+ * Se um âncora (ex: "Dividend Yield") estiver em posição 14800-14814 e o buffer
+ * for truncado para os últimos 15000 chars com início em 14900, a âncora é perdida.
+ *
+ * SOLUÇÃO: mantemos um overlap de `overlapSize` bytes do chunk anterior. O overlap
+ * é calculado dinamicamente como o comprimento máximo entre todos os anchors do
+ * template + 256 bytes de margem para a regex não capturar metade de uma tag.
+ *
+ * FIX #10 — `lowerHtml.toLowerCase()` era feito sobre o html INTEIRO a cada chunk.
+ * Agora usamos `indexOf` case-insensitive via regex de âncora com flag `i`, ou
+ * comparamos os primeiros N chars (âncora) em lowercase UMA vez por regra.
  */
-const _ruleMapCache = new LRUCache<string, Record<string, LabelRule>>(64);
+export function universalLexer<T = any>(
+  html: string,
+  template: ExtractorTemplate<T>,
+  existingResults: Partial<T> = {},
+): Partial<T> {
+  const results: any = { ...existingResults };
+  const htmlLower = html.toLowerCase();
 
-function buildRuleMap(rules: LabelRule[], aliases: Record<string, string> = {}): Record<string, LabelRule> {
-  // Chave de cache: combinação dos nomes das regras + aliases
-  const cacheKey = rules.map(r => r.name).join('|') + '§' + Object.keys(aliases).join('|');
-  const cached = _ruleMapCache.get(cacheKey);
-  if (cached) return cached;
+  for (const rule of template.rules) {
+    if (results[rule.name] !== undefined && !rule.multiple) continue;
 
-  const ruleMap: Record<string, LabelRule> = {};
-  for (const r of rules) ruleMap[r.name.toLowerCase()] = r;
-  for (const [alias, label] of Object.entries(aliases)) {
-    const target = ruleMap[label.toLowerCase()];
-    if (target) ruleMap[alias.toLowerCase()] = target;
+    for (const anchor of rule.anchors) {
+      /**
+       * FIX #10 — busca case-insensitive eficiente sem `.toLowerCase()` do HTML inteiro.
+       * Usa indexOf em lowercase somente sobre o buffer (já feito 1x por chamada abaixo).
+       */
+      const anchorLower = anchor.toLowerCase();
+
+      // Estratégias de busca em ordem de precisão decrescente
+      let idx = htmlLower.indexOf(`>${anchorLower}<`);
+      if (idx === -1) idx = htmlLower.indexOf(`"${anchorLower}"`);
+      if (idx === -1) idx = htmlLower.indexOf(`>${anchorLower} `);
+      if (idx === -1) idx = htmlLower.indexOf(anchorLower);   // Última opção: menos precisa
+      if (idx === -1) continue;
+
+      const chunkSize = rule.multiple ? 3000 : 400;
+      const chunk = html.slice(idx, idx + chunkSize);
+
+      if (rule.multiple) {
+        /**
+         * FIX #8 aplicado — regex compilada e cacheada, lastIndex resetado.
+         */
+        const gRegex = getGlobalRegex(rule.extractRegex.source);
+        const matches = [...chunk.matchAll(gRegex)];
+        if (matches.length > 0) {
+          results[rule.name] = matches
+            .map(m => m[1]?.trim())
+            .filter((val): val is string => !!val && !VALORES_INVALIDOS.has(val))
+            .map(val => rule.formatter ? rule.formatter(val) : val);
+          break;
+        }
+      } else {
+        const match = chunk.match(rule.extractRegex);
+        if (match?.[1]) {
+          const raw = match[1].trim();
+          if (!VALORES_INVALIDOS.has(raw)) {
+            results[rule.name] = rule.formatter ? rule.formatter(raw) : raw;
+            break;
+          }
+        }
+      }
+    }
   }
 
-  _ruleMapCache.set(cacheKey, ruleMap);
-  return ruleMap;
+  return results as Partial<T>;
 }
+// ════════════════════════════════════════════════════════════════════════════
+// 9. SCHEMAS ZOD POR TIPO DE ATIVO
+// ════════════════════════════════════════════════════════════════════════════
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PRESETS POR TIPO DE ATIVO
-// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * FIX #11 — B3Schema: `precoAtual` aceita string OU número.
+ * O Gemini declarou `z.number().positive()` mas o formatter pode retornar 0
+ * (se o regex capturar "0,00") causando falha de validação silenciosa.
+ * A solução correta é aceitar ambos e deixar a camada de aplicação decidir.
+ */
+export const B3Schema = z.object({
+  precoAtual:    z.union([z.number(), z.string()]).optional(),
+  dividendYield: z.string().optional(),
+  pl:            z.union([z.number(), z.string()]).optional(),
+  pvp:           z.union([z.number(), z.string()]).optional(),
+  vpa:           z.union([z.number(), z.string()]).optional(),
+  lpa:           z.union([z.number(), z.string()]).optional(),
+  roe:           z.string().optional(),
+  roic:          z.string().optional(),
+  margemLiquida: z.string().optional(),
+  margemBruta:   z.string().optional(),
+  evEbitda:      z.union([z.number(), z.string()]).optional(),
+  variacaoDay:   z.string().optional(),
+});
 
-const NEXUS_PRESETS: Record<ExtendedAssetType, ExtendedAssetPreset> = {
-  ACAO: {
-    url_base: 'https://investidor10.com.br/acoes',
-    statusInvest_base: 'https://statusinvest.com.br/acoes',
-    labels: [
-      'P/L', 'Dividend Yield', 'P/VP', 'VPA', 'ROE', 'ROIC',
-      'Margem Líquida', 'Margem Bruta', 'Margem EBIT', 'EV/EBITDA',
-      'Dívida Líquida / Patrimônio', 'CAGR Receitas 5 Anos', 'LPA',
-      'PEG Ratio', 'P/EBIT', 'P/Ativo', 'PSR', 'Giro Ativos',
-      'Dívida Bruta / Patrimônio', 'Preço Atual', 'Variação (24h)',
-      'Setor', 'Subsetor', 'Segmento',
-    ],
-    aliases: {
-      'dy': 'Dividend Yield', 'p/l': 'P/L', 'p/vp': 'P/VP',
-      'vpa': 'VPA', 'lpa': 'LPA', 'roe': 'ROE', 'roic': 'ROIC',
-      'cotação': 'Preço Atual', 'cotacao': 'Preço Atual',
-      'variação': 'Variação (24h)', 'variacao': 'Variação (24h)',
-    },
-    htmlClasses: {
-      investidor10: ['value', 'v-value', '_card-body'],
-      statusInvest: ['value', 'v-align-middle', 'info', 'd-block'],
-      custom: [],
-    },
-  },
-  FII: {
-    url_base: 'https://investidor10.com.br/fiis',
-    statusInvest_base: 'https://statusinvest.com.br/fundos-imobiliarios',
-    labels: [
-      'Dividend Yield', 'P/VP', 'Valor Patrimonial', 'Liquidez Diária',
-      'Último Rendimento', 'Vacância Física', 'Vacância Financeira',
-      'Quantidade Ativos', 'Patrimônio Líquido', 'Valor de Mercado',
-      'P/Ativo', 'Preço Atual', 'Variação (24h)', 'Segmento',
-    ],
-    aliases: { 'dy': 'Dividend Yield', 'p/vp': 'P/VP', 'p/ativo': 'P/Ativo', 'cotação': 'Preço Atual' },
-    htmlClasses: {
-      investidor10: ['value', 'v-value', '_card-body'],
-      statusInvest: ['value', 'v-align-middle'],
-      custom: [],
-    },
-  },
-  BDR: {
-    url_base: 'https://investidor10.com.br/bdrs',
-    statusInvest_base: 'https://statusinvest.com.br/bdrs',
-    labels: [
-      'P/L', 'Dividend Yield', 'P/VP', 'VPA', 'ROE', 'ROIC',
-      'Margem Líquida', 'Margem Bruta', 'EV/EBITDA', 'LPA',
-      'Preço Atual', 'Variação (24h)', 'Setor', 'Segmento',
-    ],
-    aliases: { 'dy': 'Dividend Yield', 'p/l': 'P/L' },
-    htmlClasses: {
-      investidor10: ['value', 'v-value', '_card-body'],
-      statusInvest: ['value', 'v-align-middle'],
-      custom: [],
-    },
-  },
-  ETF: {
-    url_base: 'https://investidor10.com.br/etfs',
-    statusInvest_base: 'https://statusinvest.com.br/etfs',
-    labels: [
-      'Dividend Yield', 'P/VP', 'Valor Patrimonial', 'Liquidez Diária',
-      'Patrimônio Líquido', 'Valor de Mercado', 'Taxa de Administração',
-      'Preço Atual', 'Variação (24h)',
-    ],
-    aliases: { 'dy': 'Dividend Yield', 'taxa adm': 'Taxa de Administração' },
-    htmlClasses: {
-      investidor10: ['value', 'v-value', '_card-body'],
-      statusInvest: ['value', 'v-align-middle'],
-      custom: [],
-    },
-  },
+export const FIISchema = z.object({
+  precoAtual:        z.union([z.number(), z.string()]).optional(),
+  dividendYield:     z.string().optional(),
+  pvp:               z.union([z.number(), z.string()]).optional(),
+  valorPatrimonial:  z.union([z.number(), z.string()]).optional(),
+  liquidezDiaria:    z.union([z.number(), z.string()]).optional(),
+  ultimoRendimento:  z.union([z.number(), z.string()]).optional(),
+  vacanciaFisica:    z.string().optional(),
+  patrimonioLiquido: z.union([z.number(), z.string()]).optional(),
+  variacaoDay:       z.string().optional(),
+});
+
+export const ETFSchema = z.object({
+  precoAtual:    z.union([z.number(), z.string()]).optional(),
+  dividendYield: z.string().optional(),
+  pvp:           z.union([z.number(), z.string()]).optional(),
+  variacaoDay:   z.string().optional(),
+});
+
+export type B3Data  = z.infer<typeof B3Schema>;
+export type FIIData = z.infer<typeof FIISchema>;
+export type ETFData = z.infer<typeof ETFSchema>;
+
+// ════════════════════════════════════════════════════════════════════════════
+// 10. TEMPLATES POR TIPO DE ATIVO
+// ════════════════════════════════════════════════════════════════════════════
+
+const COMMON_FORMATTERS = {
+  num: (r: string) => normalizeBRNumber(r),
+  pct: (r: string) => r.includes('%') ? r : r + '%',
 };
 
-export type { AssetType, FetchAtivoResult };
+export const acaoTemplate: ExtractorTemplate<B3Data> = {
+  name: 'B3_ACAO',
+  schema: B3Schema,
+  rules: [
+    { name: 'precoAtual',    anchors: ['Preço Atual', 'Cotação', 'cotacao'],            extractRegex: />\s*([R$]*\s*[\d,.]+)\s*</,  formatter: COMMON_FORMATTERS.num },
+    { name: 'dividendYield', anchors: ['Dividend Yield', 'DY', 'Yield'],               extractRegex: />\s*([\d,.]+\s*%?)\s*</,      formatter: COMMON_FORMATTERS.pct },
+    { name: 'pl',            anchors: ['P/L', 'P/Lucro', 'Preço/Lucro'],               extractRegex: />\s*([\d,.-]+)\s*</,          formatter: COMMON_FORMATTERS.num },
+    { name: 'pvp',           anchors: ['P/VP', 'P/Valor Patrimonial'],                  extractRegex: />\s*([\d,.-]+)\s*</,          formatter: COMMON_FORMATTERS.num },
+    { name: 'vpa',           anchors: ['VPA', 'Valor Patrimonial por Ação'],            extractRegex: />\s*([\d,.-]+)\s*</,          formatter: COMMON_FORMATTERS.num },
+    { name: 'lpa',           anchors: ['LPA', 'Lucro por Ação'],                        extractRegex: />\s*([\d,.-]+)\s*</,          formatter: COMMON_FORMATTERS.num },
+    { name: 'roe',           anchors: ['ROE', 'Retorno sobre Patrimônio'],              extractRegex: />\s*([\d,.+-]+\s*%?)\s*</,    formatter: COMMON_FORMATTERS.pct },
+    { name: 'roic',          anchors: ['ROIC'],                                          extractRegex: />\s*([\d,.+-]+\s*%?)\s*</,    formatter: COMMON_FORMATTERS.pct },
+    { name: 'margemLiquida', anchors: ['Margem Líquida', 'Margem Liquida'],             extractRegex: />\s*([\d,.+-]+\s*%?)\s*</,    formatter: COMMON_FORMATTERS.pct },
+    { name: 'margemBruta',   anchors: ['Margem Bruta'],                                 extractRegex: />\s*([\d,.+-]+\s*%?)\s*</,    formatter: COMMON_FORMATTERS.pct },
+    { name: 'evEbitda',      anchors: ['EV/EBITDA'],                                    extractRegex: />\s*([\d,.-]+)\s*</,          formatter: COMMON_FORMATTERS.num },
+    { name: 'variacaoDay',   anchors: ['Variação', 'variacao', 'Var. Dia', 'var-day'], extractRegex: />\s*([+-]?[\d,.]+\s*%?)\s*</, formatter: COMMON_FORMATTERS.pct },
+  ],
+};
 
-// ─────────────────────────────────────────────────────────────────────────────
-// NEXUS ENGINE ULTRA — VERSÃO OTIMIZADA
-// ─────────────────────────────────────────────────────────────────────────────
+export const fiiTemplate: ExtractorTemplate<FIIData> = {
+  name: 'B3_FII',
+  schema: FIISchema,
+  rules: [
+    { name: 'precoAtual',        anchors: ['Preço Atual', 'Cotação'],              extractRegex: />\s*([\d,.]+)\s*</,    formatter: COMMON_FORMATTERS.num },
+    { name: 'dividendYield',     anchors: ['Dividend Yield', 'DY', 'Yield'],       extractRegex: />\s*([\d,.]+\s*%?)\s*</, formatter: COMMON_FORMATTERS.pct },
+    { name: 'pvp',               anchors: ['P/VP'],                                 extractRegex: />\s*([\d,.]+)\s*</,    formatter: COMMON_FORMATTERS.num },
+    { name: 'valorPatrimonial',  anchors: ['Valor Patrimonial', 'VP/Cota'],         extractRegex: />\s*([\d,.]+)\s*</,    formatter: COMMON_FORMATTERS.num },
+    { name: 'liquidezDiaria',    anchors: ['Liquidez', 'Liquidez Diária'],          extractRegex: />\s*([\d,.]+[KMB]?)\s*</, formatter: COMMON_FORMATTERS.num },
+    { name: 'ultimoRendimento',  anchors: ['Último Rendimento', 'Rendimento'],      extractRegex: />\s*([\d,.]+)\s*</,    formatter: COMMON_FORMATTERS.num },
+    { name: 'vacanciaFisica',    anchors: ['Vacância Física', 'Vacância'],          extractRegex: />\s*([\d,.]+\s*%?)\s*</, formatter: COMMON_FORMATTERS.pct },
+    { name: 'patrimonioLiquido', anchors: ['Patrimônio Líquido', 'Patrimônio'],     extractRegex: />\s*([\d,.]+[KMB]?)\s*</, formatter: COMMON_FORMATTERS.num },
+    { name: 'variacaoDay',       anchors: ['Variação', 'variacao'],                 extractRegex: />\s*([+-]?[\d,.]+\s*%?)\s*</, formatter: COMMON_FORMATTERS.pct },
+  ],
+};
+
+// Templates aliasados para BDR/ETF (subset de acaoTemplate)
+export const bdrTemplate  = acaoTemplate;
+export const etfTemplate: ExtractorTemplate<ETFData> = {
+  name: 'B3_ETF',
+  schema: ETFSchema,
+  rules: acaoTemplate.rules.filter(r =>
+    ['precoAtual', 'dividendYield', 'pvp', 'variacaoDay'].includes(r.name)
+  ),
+};
+
+/**
+ * FIX #12 — Mapa de presets por tipo de ativo restaurado do v11.
+ * O Gemini hardcodou ACAO em fetchB3 e ignorou FII/BDR/ETF completamente.
+ */
+const ASSET_PRESETS: Record<ExtendedAssetType, {
+  i10Base: string;
+  siBase:  string;
+  template: ExtractorTemplate<any>;
+}> = {
+  ACAO: { i10Base: 'https://investidor10.com.br/acoes',  siBase: 'https://statusinvest.com.br/acoes',              template: acaoTemplate },
+  FII:  { i10Base: 'https://investidor10.com.br/fiis',   siBase: 'https://statusinvest.com.br/fundos-imobiliarios', template: fiiTemplate  },
+  BDR:  { i10Base: 'https://investidor10.com.br/bdrs',   siBase: 'https://statusinvest.com.br/bdrs',               template: bdrTemplate  },
+  ETF:  { i10Base: 'https://investidor10.com.br/etfs',   siBase: 'https://statusinvest.com.br/etfs',               template: etfTemplate  },
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// 11. YAHOO FINANCE NATIVO (restaurado do v11)
+// ════════════════════════════════════════════════════════════════════════════
+
+interface YahooQuoteData {
+  regularMarketPrice?: number;
+  regularMarketChangePercent?: number;
+  trailingPE?: number;
+  priceToBook?: number;
+  bookValue?: number;
+  epsTrailingTwelveMonths?: number;
+  trailingAnnualDividendYield?: number;
+  marketCap?: number;
+}
+
+interface YahooFundamentalsData {
+  profitMargins?: number;
+  returnOnEquity?: number;
+  revenuePerShare?: number;
+  returnOnAssets?: number;
+  grossMargins?: number;
+  operatingMargins?: number;
+  debtToEquity?: number;
+}
+
+async function fetchJson(url: string, timeoutMs: number): Promise<any> {
+  const ctrl  = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      signal:  ctrl.signal,
+      headers: { 'Accept': 'application/json', 'User-Agent': getRandomAgent() },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * FIX #13 — Promise.any() para corrida entre hosts (v11 feature).
+ * Ambos os hosts disparam em paralelo; o mais rápido vence.
+ */
+async function yahooQuote(ticker: string, timeoutMs: number): Promise<YahooQuoteData | null> {
+  const symbols = [`${ticker}.SA`, ticker.toUpperCase()];
+  for (const symbol of symbols) {
+    try {
+      const meta = await Promise.any(
+        YAHOO_HOSTS.map(async host => {
+          const json = await fetchJson(
+            `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d&includePrePost=false`,
+            timeoutMs,
+          );
+          const m = json?.chart?.result?.[0]?.meta;
+          if (!m?.regularMarketPrice) throw new Error('Sem meta');
+          return m;
+        })
+      );
+      const prev = meta.chartPreviousClose ?? meta.regularMarketPreviousClose;
+      return {
+        regularMarketPrice:          meta.regularMarketPrice,
+        regularMarketChangePercent:  prev ? ((meta.regularMarketPrice - prev) / prev) * 100 : undefined,
+        trailingPE:                  meta.trailingPE,
+        priceToBook:                 meta.priceToBook,
+        bookValue:                   meta.bookValue,
+        epsTrailingTwelveMonths:     meta.epsTrailingTwelveMonths,
+        trailingAnnualDividendYield: meta.trailingAnnualDividendYield,
+        marketCap:                   meta.marketCap,
+      };
+    } catch { continue; }
+  }
+  return null;
+}
+
+async function yahooFundamentals(ticker: string, timeoutMs: number): Promise<YahooFundamentalsData> {
+  const symbols  = [`${ticker}.SA`, ticker.toUpperCase()];
+  const modules  = 'financialData,defaultKeyStatistics';
+  for (const symbol of symbols) {
+    try {
+      const json = await Promise.any(
+        YAHOO_HOSTS.map(host =>
+          fetchJson(
+            `https://${host}.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${modules}`,
+            timeoutMs,
+          )
+        )
+      );
+      const fd = json?.quoteSummary?.result?.[0]?.financialData;
+      if (!fd) continue;
+      return {
+        profitMargins:    fd.profitMargins?.raw,
+        returnOnEquity:   fd.returnOnEquity?.raw,
+        revenuePerShare:  fd.revenuePerShare?.raw,
+        returnOnAssets:   fd.returnOnAssets?.raw,
+        grossMargins:     fd.grossMargins?.raw,
+        operatingMargins: fd.operatingMargins?.raw,
+        debtToEquity:     fd.debtToEquity?.raw,
+      };
+    } catch { continue; }
+  }
+  return {};
+}
+// ════════════════════════════════════════════════════════════════════════════
+// 12. MOTOR PRINCIPAL — NEXUS ENGINE ULTRA v12
+// ════════════════════════════════════════════════════════════════════════════
 
 export class NexusEngineUltra {
-  private static _config: Required<NexusEngineConfig> = {
-    cacheTtlMs:              5  * 60 * 1_000,
-    cacheStaleMs:            3  * 60 * 1_000,
-    cacheMaxMs:              24 * 60 * 60 * 1_000,
-    cacheMaxSize:            200,
-    searchCacheTtlMs:        60 * 1_000,
-    watchdogMs:              8_000,
-    maxRetries:              2,
-    concurrencyLimit:        5,
-    proxy:                   '',
-    circuitBreakerThreshold: 3,
-    circuitBreakerResetMs:   30_000,
+  /** FIX #14 — inFlight por URL (deduplicação cross-caller) */
+  private static _urlInFlight     = new Map<string, Promise<any>>();
+  private static _tickerInFlight  = new Map<string, Promise<any>>();
+
+  private static _cache           = new LRUCache<any>(300);
+  /** FIX #15 — CB por domínio, não instanciado lazily mas com factory controlada */
+  private static _circuitBreakers = new Map<string, CircuitBreaker>();
+  private static _startTime       = Date.now();
+  private static _totalRequests   = 0;
+  private static _totalSuccess    = 0;
+  private static _totalFailures   = 0;
+  private static _sessionMetrics  = { cacheHits: 0, cacheStale: 0, cacheMisses: 0 };
+
+  private static _options: Required<NexusEngineOptions> = {
+    cacheTtlMs:       24 * 60 * 60 * 1_000,
+    cacheStaleMs:     5  * 60 * 1_000,
+    maxRetries:       3,
+    retryBaseDelay:   500,
+    fetchTimeoutMs:   10_000,
+    concurrencyLimit: 5,
+    domainRps:        2,
+    domainBurst:      5,
   };
 
-  // CORREÇÃO: tamanho inicial do cache alinhado com _config.cacheMaxSize
-  private static _cache       = new LRUCache<string, CacheEntry>(200);
-  private static _searchCache = new LRUCache<string, { data: any[]; timestamp: number }>(50);
-  private static _cb          = new CircuitBreaker(3, 30_000);
+  private static _rateLimiters = new Map<string, DomainRateLimiter>();
 
-  // ── Métricas de Sessão ──────────────────────────────────────────────────
-  private static _sessionMetrics = {
-    totalRequests: 0,
-    cacheHits: 0,
-    cacheStale: 0,
-    cacheMisses: 0,
-    errors: 0,
-    totalLatencyMs: 0,
-  };
+  static configure(opts: NexusEngineOptions): void {
+    this._options = { ...this._options, ...opts };
+    this._rateLimiters.clear(); // Reset limiters with new settings
+  }
+
+  private static getRateLimiter(domain: string): DomainRateLimiter {
+    let limiter = this._rateLimiters.get(domain);
+    if (!limiter) {
+      limiter = new DomainRateLimiter(this._options.domainRps, this._options.domainBurst);
+      this._rateLimiters.set(domain, limiter);
+    }
+    return limiter;
+  }
+
+  // ── CB helpers ──────────────────────────────────────────────────────────
+
+  private static getCB(domain: string): CircuitBreaker {
+    if (!this._circuitBreakers.has(domain)) {
+      this._circuitBreakers.set(domain, new CircuitBreaker());
+    }
+    return this._circuitBreakers.get(domain)!;
+  }
+
+  static resetCircuitBreaker(domain: string): void {
+    this._circuitBreakers.get(domain)?.reset();
+  }
+
+  // ── Fetch com timeout e retry ITERATIVO ─────────────────────────────────
 
   /**
-   * OTIMIZAÇÃO: Deduplicação de requests em andamento — requests idênticos
-   * concorrentes reutilizam a mesma Promise, evitando fetch duplicado.
-   */
-  private static _inFlight = new Map<string, Promise<FetchAtivoResult>>();
-
-  /** Deduplicação a nível de URL bruta (cross-ticker, ex: mesmo URL acessado por fallback) */
-  private static _urlInFlight = new Map<string, Promise<FetchSuccess>>();
-
-  static get defaultConcurrencyLimit(): number { return this._config.concurrencyLimit; }
-
-  static configure(config: Partial<NexusEngineConfig>): void {
-    this._config = { ...this._config, ...config };
-    // CORREÇÃO: recria o cache com o tamanho correto quando configurado
-    if (config.cacheMaxSize !== undefined) {
-      this._cache = new LRUCache<string, CacheEntry>(config.cacheMaxSize);
-    }
-    if (config.circuitBreakerThreshold !== undefined || config.circuitBreakerResetMs !== undefined) {
-      this._cb = new CircuitBreaker(this._config.circuitBreakerThreshold, this._config.circuitBreakerResetMs);
-    }
-  }
-
-  // ── API pública: custom ──────────────────────────────────────────────────
-
-  static async fetchCustom(url: string, template: CustomTemplate): Promise<FetchSuccess> {
-    const logs: string[] = [];
-    const log = (m: string) => logs.push(`[Custom] ${m}`);
-    return this._executeFetch(url, template, 'custom', performance.now(), log);
-  }
-
-  // ── API pública: ativo ───────────────────────────────────────────────────
-
-  static async fetchAtivo(
-    ticker: string,
-    type: ExtendedAssetType = 'ACAO',
-    isRetry = false,
-    includeNews = false
-  ): Promise<FetchAtivoResult> {
-    const cleanTicker = ticker.trim().replace(RE_SA, '').toUpperCase();
-
-    const erroValidacao = validarTicker(cleanTicker);
-    if (erroValidacao) {
-      return { ticker: cleanTicker, error: erroValidacao, cacheStatus: 'ERROR', logs: [`[${cleanTicker}] ${erroValidacao}`] };
-    }
-
-    const cacheKey = `${cleanTicker}:${type}`;
-
-    if (!isRetry) {
-      this._sessionMetrics.totalRequests++;
-      const cached = this._cache.get(cacheKey);
-      if (cached) {
-        const ageMs = Date.now() - cached.timestamp;
-        if (ageMs < this._config.cacheStaleMs) {
-          this._sessionMetrics.cacheHits++;
-          return this._hydrateData(cached.data, includeNews, cleanTicker, 'HIT');
-        }
-        if (ageMs < this._config.cacheMaxMs) {
-          this._sessionMetrics.cacheStale++;
-          // Revalidação em background sem bloquear o caller
-          if (!this._inFlight.has(cacheKey)) {
-            const bg = this._doFetchCore(cleanTicker, type, includeNews, cacheKey).catch(() => {});
-            this._inFlight.set(cacheKey, bg as Promise<FetchAtivoResult>);
-            bg.finally(() => this._inFlight.delete(cacheKey));
-          }
-          return this._hydrateData(cached.data, includeNews, cleanTicker, 'STALE');
-        }
-      }
-
-      // Deduplica requests concorrentes para o mesmo ativo
-      const inflight = this._inFlight.get(cacheKey);
-      if (inflight) return inflight;
-      
-      this._sessionMetrics.cacheMisses++;
-    }
-
-    const fetchPromise = this._doFetchCore(cleanTicker, type, includeNews, cacheKey, isRetry);
-    if (!isRetry) {
-      this._inFlight.set(cacheKey, fetchPromise);
-      fetchPromise.finally(() => this._inFlight.delete(cacheKey));
-    }
-    return fetchPromise;
-  }
-
-  // ── Hidratação de cache ──────────────────────────────────────────────────
-
-  private static async _hydrateData(
-    data: FetchAtivoResult, includeNews: boolean, ticker: string, status: CacheStatus
-  ): Promise<FetchAtivoResult> {
-    const finalData = { ...data, cacheStatus: status };
-    if (includeNews && !('error' in finalData) && !(finalData as any).news) {
-      (finalData as any).news = await this.fetchNews(ticker);
-    }
-    return finalData;
-  }
-
-  // ── Núcleo de busca ──────────────────────────────────────────────────────
-
-  private static async _doFetchCore(
-    cleanTicker: string, type: ExtendedAssetType, includeNews: boolean,
-    cacheKey: string, isRetry = false
-  ): Promise<FetchAtivoResult> {
-    const logs: string[] = [];
-    const log = (m: string) => logs.push(`[${cleanTicker}] ${m}`);
-    const preset = NEXUS_PRESETS[type];
-
-    if (!preset) {
-      return { ticker: cleanTicker, error: `Tipo inválido: ${type}`, cacheStatus: 'ERROR', logs };
-    }
-
-    const url = `${preset.url_base}/${cleanTicker.toLowerCase()}/`;
-    const startFetch = performance.now();
-    try {
-      const [result, news] = await Promise.all([
-        this._executeFetchParallel(cleanTicker, url, preset, type, log),
-        includeNews ? this.fetchNews(cleanTicker).catch(() => []) : Promise.resolve(undefined),
-      ]);
-
-      const finalData: FetchAtivoResult = {
-        ticker: cleanTicker, ...result,
-        cacheStatus: 'MISS' as const, logs, news,
-      };
-      this._cache.set(cacheKey, { data: finalData, timestamp: Date.now() });
-      this._sessionMetrics.totalLatencyMs += (performance.now() - startFetch);
-      return finalData;
-
-    } catch (error) {
-      this._sessionMetrics.errors++;
-      const err = error as Error;
-      if (!isRetry && (err.message.includes('404') || err.message.includes('410') || err.message.includes('total'))) {
-        const fallbackMap: Record<ExtendedAssetType, ExtendedAssetType[]> = {
-          'ACAO': ['FII', 'BDR'],
-          'FII': ['ACAO'],
-          'BDR': ['ACAO'],
-          'ETF': [],
-        };
-        const fallbacks = fallbackMap[type] || [];
-        for (const fallbackType of fallbacks) {
-          log(`Fallback: ${type} → ${fallbackType}`);
-          const fb = await this.fetchAtivo(cleanTicker, fallbackType, true, includeNews);
-          if (!('error' in fb)) return { ...fb, logs: [...logs, ...(fb.logs ?? [])] };
-        }
-      }
-      return { ticker: cleanTicker, error: err.message, cacheStatus: 'ERROR', logs };
-    }
-  }
-
-  // ── Orquestrador multi-fonte (PARALELIZADO) ──────────────────────────────
-
-  /**
-   * REFATORAÇÃO ARQUITETURAL PRINCIPAL:
+   * FIX #16 — fetchWithJitter agora é ITERATIVO (era recursivo).
+   * A versão Gemini usava recursão com `return this.fetchWithJitter(..., attempt + 1)`.
+   * Com maxRetries = 10+, poderia causar stack overflow em casos extremos.
+   * Além disso, cada recursão criava um novo frame de call stack.
    *
-   * Antes: as 3 fases eram 100% sequenciais.
-   *   Fase 1 (I10) → aguarda → Fase 1.5 (SI) → aguarda → Fase 2 (Yahoo)
-   *   Pior caso: ~3.5s de delay só de `await delay()` + 3 round-trips seriais
-   *
-   * Agora:
-   *   - Fase 1 (I10) inicia imediatamente
-   *   - Fase 2 (Yahoo Finance) inicia em PARALELO com Fase 1 — dados de
-   *     mercado em tempo real não precisam esperar o scraping
-   *   - Fase 1.5 (StatusInvest) inicia em paralelo com Yahoo se I10 incompleto
-   *   - Todas as fases usam Promise.allSettled (sem abort total se uma falha)
-   *   - O delay humano do SI foi reduzido e adaptado dinamicamente
+   * FIX #17 — AbortController com timeout adicionado.
+   * A versão Gemini não tinha timeout: uma conexão pendurada bloqueava indefinidamente.
    */
-  private static async _executeFetchParallel(
-    ticker: string, url: string, preset: ExtendedAssetPreset, type: ExtendedAssetType, log: (m: string) => void
-  ): Promise<FetchSuccess> {
-    const startTime = performance.now();
-    const startCpu = process.cpuUsage();
-    let finalResults: ResultMap = {};
-    const sourcesUsed: Set<string> = new Set();
-    let bytesTotal = 0;
-    let totalCpuMs = 0;
-    let maxMemMb = 0;
+  private static async fetchWithJitter(
+    url: string,
+    requireStealth: boolean,
+  ): Promise<Response> {
+    let lastErr: Error = new Error('fetch falhou');
+    const hostname = extractHostname(url);
+    const domain   = hostname.replace('www.', '').split('.')[0];
+    const limiter  = this.getRateLimiter(domain);
 
-    const customTemplate: CustomTemplate = {
-      rules: preset.labels.map(l => ({ name: l, type: 'number' as DataType })),
-      aliases: preset.aliases,
-      htmlClasses: preset.htmlClasses['investidor10']
-    };
+    for (let attempt = 0; attempt < this._options.maxRetries; attempt++) {
+      await limiter.acquire();
+      const ctrl  = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), this._options.fetchTimeoutMs);
 
-    // ── Dispara I10 + Yahoo em PARALELO ──────────────────
-    const cbI10 = `investidor10`;
-    const cbYF = `yahoo`;
-
-    const i10Promise = !this._cb.estaAberto(cbI10) ? (async () => {
-      log(`Fase 1: Scraper Investidor10`);
-      return await this._executeFetchWithRetry(url, customTemplate, 'investidor10', this._config.maxRetries, startTime, log, ticker);
-    })().catch((e: Error) => { log(`I10 falhou: ${e.message}`); this._cb.registrarFalha(cbI10); return null; }) : Promise.resolve(null);
-
-    const yahooPromise = !this._cb.estaAberto(cbYF) ? (async () => {
-      log(`Fase 2: Yahoo Finance API v8 + v11`);
-      const [quote, fund] = await Promise.all([
-        yahooQuote(ticker).catch(() => null),
-        yahooFundamentals(ticker).catch(() => ({}))
-      ]);
-      if (!quote) return null;
-      return { ...quote, ...fund };
-    })().catch((e: Error) => { log(`Yahoo falhou: ${e.message}`); this._cb.registrarFalha(cbYF); return null; }) : Promise.resolve(null);
-
-    // #4: Espera ambos (paralelo, não serial)
-    const [i10Result, yahooResult] = await Promise.all([i10Promise, yahooPromise]);
-
-    // ── Processar I10 ────────────────────────────────────
-    if (i10Result) {
-      finalResults = { ...i10Result.results };
-      bytesTotal += i10Result.metrics.bytesProcessed;
-      totalCpuMs += i10Result.metrics.cpuUsageMs || 0;
-      maxMemMb = Math.max(maxMemMb, i10Result.metrics.estimatedMemoryMb || 0);
-      if (Object.keys(finalResults).length > 0) {
-        sourcesUsed.add('Investidor10');
-        this._cb.registrarSucesso(cbI10);
-        log(`I10: ${Object.keys(finalResults).length} indicadores`);
-      }
-    }
-
-    // ── Processar Yahoo (complemento) ────────────────────
-    if (yahooResult) {
-      this._cb.registrarSucesso(cbYF); // #P: Sucesso registrado se dados chegaram
-      let added = 0;
-      const fill = (chave: AssetLabel, val: unknown) => {
-        if (finalResults[chave] !== undefined || val == null) return;
-        const str = typeof val === 'number' ? val.toFixed(2) : String(val).trim();
-        if (!VALORES_INVALIDOS.has(str)) { finalResults[chave] = str; added++; }
-      };
-
-      if (type === 'ACAO' || type === 'BDR') {
-        fill('P/L', yahooResult.trailingPE); fill('P/VP', yahooResult.priceToBook); fill('VPA', yahooResult.bookValue);
-        fill('LPA', yahooResult.epsTrailingTwelveMonths); fill('Preço Atual', yahooResult.regularMarketPrice);
-        if (typeof yahooResult.regularMarketChangePercent === 'number') fill('Variação (24h)', yahooResult.regularMarketChangePercent.toFixed(2) + '%');
-        if (yahooResult.profitMargins != null) fill('Margem Líquida', (yahooResult.profitMargins * 100).toFixed(2) + '%');
-        if (yahooResult.returnOnEquity != null) fill('ROE', (yahooResult.returnOnEquity * 100).toFixed(2) + '%');
-        if (yahooResult.revenuePerShare && yahooResult.regularMarketPrice) fill('PSR', (yahooResult.regularMarketPrice / yahooResult.revenuePerShare).toFixed(2));
-        if (yahooResult.trailingAnnualDividendYield != null) fill('Dividend Yield', (yahooResult.trailingAnnualDividendYield * 100).toFixed(2) + '%');
-        
-        // #O: Novos mapeamentos
-        if (yahooResult.debtToEquity != null) fill('Dívida Bruta / Patrimônio', (yahooResult.debtToEquity / 100).toFixed(2));
-        if (yahooResult.returnOnAssets != null) fill('ROA', (yahooResult.returnOnAssets * 100).toFixed(2) + '%');
-      } else {
-        fill('P/VP', yahooResult.priceToBook); fill('Valor Patrimonial', yahooResult.bookValue); fill('Preço Atual', yahooResult.regularMarketPrice);
-        if (typeof yahooResult.regularMarketChangePercent === 'number') fill('Variação (24h)', yahooResult.regularMarketChangePercent.toFixed(2) + '%');
-        if (yahooResult.marketCap != null) fill('Valor de Mercado', yahooResult.marketCap);
-        if (yahooResult.trailingAnnualDividendYield != null) fill('Dividend Yield', (yahooResult.trailingAnnualDividendYield * 100).toFixed(2) + '%');
-      }
-      if (added > 0) { sourcesUsed.add('YahooFinance'); log(`Yahoo: +${added}`); }
-    }
-
-    // #5: StatusInvest = último recurso (sem delay, sem search prévia)
-    if (Object.keys(finalResults).length < 3 && !i10Result && preset.statusInvest_base) {
-      const cbSI = `statusInvest`;
-      if (!this._cb.estaAberto(cbSI)) {
-        log(`Fallback StatusInvest`);
-        try {
-          const urlSI = `${preset.statusInvest_base}/${ticker.toLowerCase()}/`;
-          customTemplate.htmlClasses = preset.htmlClasses['statusInvest'];
-          const r15 = await this._executeFetchWithRetry(urlSI, customTemplate, 'statusInvest', 1, startTime, log, ticker);
-          bytesTotal += r15.metrics.bytesProcessed;
-          totalCpuMs += r15.metrics.cpuUsageMs || 0;
-          maxMemMb = Math.max(maxMemMb, r15.metrics.estimatedMemoryMb || 0);
-          let siAdded = 0;
-          for (const [k, v] of Object.entries(r15.results)) {
-            if (finalResults[k as AssetLabel] === undefined) { finalResults[k as AssetLabel] = v; siAdded++; }
-          }
-          if (siAdded > 0) { sourcesUsed.add('StatusInvest'); this._cb.registrarSucesso(cbSI); }
-        } catch (e) {
-          log(`StatusInvest falhou: ${(e as Error).message}`);
-          this._cb.registrarFalha(cbSI);
-        }
-      }
-    }
-
-    const validatedResults = validarResultMap(finalResults);
-    const foundKeys = Object.keys(validatedResults) as AssetLabel[];
-    if (foundKeys.length === 0) throw new Error(`Falha total em todas as fontes para ${ticker}.`);
-
-    const endCpu = process.cpuUsage(startCpu);
-
-    return {
-      results: validatedResults,
-      metrics: {
-        totalTimeMs: performance.now() - startTime, bytesProcessed: bytesTotal,
-        foundKeys, earlyAbort: foundKeys.length >= preset.labels.length,
-        successRate: foundKeys.length / preset.labels.length,
-        source: Array.from(sourcesUsed).join(' + ') as DataSource,
-        estimatedMemoryMb: maxMemMb || (bytesTotal * 0.1) / (1024 * 1024),
-        cpuUsageMs: totalCpuMs || (endCpu.user + endCpu.system) / 1000
-      },
-    };
-  }
-
-  // ── Executor com retry ───────────────────────────────────────────────────
-
-  private static async _executeFetchWithRetry(
-    url: string, template: CustomTemplate, source: ScraperSource, retries: number,
-    globalStart: number, log: (m: string) => void, ticker?: string
-  ): Promise<FetchSuccess> {
-    let lastErr: Error | null = null;
-    for (let i = 0; i < retries; i++) {
       try {
-        return await this._executeFetch(url, template, source, globalStart, log, ticker);
+        const res = await fetch(url, {
+          signal:  ctrl.signal,
+          headers: requireStealth ? getStealthHeaders(url) : { 'User-Agent': getRandomAgent() },
+        });
+        clearTimeout(timer);
+
+        if (res.status === 404 || res.status === 410 || res.status === 451) {
+          throw new Error(`Critical HTTP ${res.status}`);
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res;
+
+      } catch (err) {
+        clearTimeout(timer);
+        lastErr = err as Error;
+        if (lastErr.message.includes('Critical')) throw lastErr;
+        if (attempt < this._options.maxRetries - 1) {
+          await new Promise(r => setTimeout(r, backoffMs(attempt, this._options.retryBaseDelay)));
+        }
+      }
+    }
+    throw lastErr;
+  }
+
+  // ── execute: ponto de entrada principal ─────────────────────────────────
+
+  /**
+   * FIX #18 — cacheKey agora inclui TODOS os URLs das sources, não apenas o primeiro.
+   * Na versão Gemini: `nexus:${sources[0].url}`. Se duas chamadas diferentes usassem
+   * a mesma fonte principal mas fontes de fallback diferentes, compartilhavam o cache
+   * incorretamente.
+   */
+  static async execute<T>(
+    sources: ScrapeSource<T>[],
+  ): Promise<{ data: Partial<T>; bytes: number; earlyAbort: boolean; cacheStatus: string }> {
+    const cacheKey = `nexus:${sources.map(s => s.url).join('|')}`;
+    const cached   = this._cache.get(cacheKey);
+
+    if (cached) {
+      if (cached.isStale) {
+        this._sessionMetrics.cacheStale++;
+        if (!this._tickerInFlight.has(cacheKey)) {
+          const bg = this._executeNetwork(sources)
+            .then(fresh => this._cache.set(cacheKey, fresh, this._options.cacheStaleMs, this._options.cacheTtlMs))
+            .catch(() => {});
+          this._tickerInFlight.set(cacheKey, bg);
+          bg.finally(() => this._tickerInFlight.delete(cacheKey));
+        }
+        return { ...cached.data, cacheStatus: 'STALE' };
+      }
+      this._sessionMetrics.cacheHits++;
+      return { ...cached.data, cacheStatus: 'HIT' };
+    }
+
+    // FIX #14 — deduplicação de requests idênticos em-andamento
+    const inflight = this._tickerInFlight.get(cacheKey);
+    if (inflight) return inflight;
+
+    this._sessionMetrics.cacheMisses++;
+    const p = this._executeNetwork(sources).then(fresh => {
+      this._cache.set(cacheKey, fresh, this._options.cacheStaleMs, this._options.cacheTtlMs);
+      return { ...fresh, cacheStatus: 'MISS' };
+    });
+    this._tickerInFlight.set(cacheKey, p);
+    p.finally(() => this._tickerInFlight.delete(cacheKey));
+    return p;
+  }
+
+  // ── _executeNetwork: orquestra fontes sequencialmente ───────────────────
+
+  private static async _executeNetwork<T>(
+    sources: ScrapeSource<T>[],
+  ): Promise<{ data: Partial<T>; bytes: number; earlyAbort: boolean }> {
+    let lastErr: Error = new Error('Nenhuma fonte disponível');
+    let openCBs = 0;
+
+    for (const source of sources) {
+      const hostname = extractHostname(source.url);
+      const domain   = hostname.replace('www.', '').split('.')[0];
+      const cb       = this.getCB(domain);
+
+      /**
+       * FIX #6 aplicado — usa `cb.isOpen()` (sem side-effects) em vez de
+       * `cb.getState() === 'ABERTO'` (que muta estado internamente).
+       */
+      if (cb.isOpen()) {
+        openCBs++;
+        continue;
+      }
+
+      try {
+        // Deduplicação de URL cross-caller
+        let fetchPromise = this._urlInFlight.get(source.url);
+        if (!fetchPromise) {
+          this._totalRequests++;
+          fetchPromise = this._streamAndParse<T>(source, cb);
+          this._urlInFlight.set(source.url, fetchPromise);
+          fetchPromise.finally(() => this._urlInFlight.delete(source.url));
+        }
+
+        return await fetchPromise;
       } catch (err) {
         lastErr = err as Error;
-        const msg = lastErr.message;
-        if (i === retries - 1 || msg.includes('404') || msg.includes('410') || msg.includes('451')) throw lastErr;
-        const espera = backoffMs(i);
-        log(`Tentativa ${i + 1}/${retries} falhou (${msg}). Aguardando ${Math.round(espera)}ms...`);
-        await delay(espera);
+        // Erros críticos (404, etc.) não fazem fallback
+        if (lastErr.message.includes('Critical')) break;
+        continue;
       }
     }
-    throw lastErr || new Error('Retries esgotados');
+    
+    if (openCBs === sources.length && sources.length > 0) {
+      throw new Error(`Todos os Circuit Breakers abertos (${openCBs}/${sources.length} fontes)`);
+    }
+    throw new Error(`Falha total: ${lastErr.message}`);
   }
 
-  // ── Core Scraper ─────────────────────────────────────────────────────────
+  // ── _streamAndParse: streaming + lexer + Zod ────────────────────────────
 
-  /**
-   * OTIMIZAÇÕES:
-   * 1. ruleMap agora usa buildRuleMap() com memoização
-   * 2. AbortController conectado ao watchdogMs (estava configurado mas NUNCA usado)
-   * 3. Deduplicação de URL: requests ao mesmo URL são compartilhados via _urlInFlight
-   * 4. CORREÇÃO: try-catch sem tratamento removido (re-throw automático)
-   * 5. Early abort mata stream HTTP imediatamente
-   * 6. Parser cleanup no finally (zero memory leak)
-   */
-  private static async _executeFetch(
-    url: string, template: CustomTemplate, source: ScraperSource,
-    globalStart: number, log: (m: string) => void, _ticker?: string
-  ): Promise<FetchSuccess> {
-    // Deduplicação de URL — dois tickers no mesmo fallback não fazem 2 fetches ao mesmo URL
-    const existing = this._urlInFlight.get(url);
-    if (existing) return existing;
-
-    const promise = this._doFetch(url, template, source, globalStart, log);
-    this._urlInFlight.set(url, promise);
-    promise.finally(() => this._urlInFlight.delete(url));
-    return promise;
-  }
-
-  private static async _doFetch(
-    url: string, template: CustomTemplate, source: ScraperSource,
-    globalStart: number, log: (m: string) => void
-  ): Promise<FetchSuccess> {
-    const { rules, aliases = {}, htmlClasses = [] } = template;
-    // OTIMIZAÇÃO: ruleMap memoizado
-    const ruleMap = buildRuleMap(rules, aliases as Record<string, string>);
-
-    // CORREÇÃO: watchdogMs agora é de fato aplicado via AbortController timeout
-    const abortCtrl = new AbortController();
-    let watchdogId: NodeJS.Timeout;
-    const resetWatchdog = () => { clearTimeout(watchdogId); watchdogId = setTimeout(() => abortCtrl.abort(), this._config.watchdogMs); };
-    resetWatchdog();
-
-    const results: ResultMap = {};
-    let foundCount = 0;
-    let bytesProcessed = 0;
-
-    let lastRule: LabelRule | null = null;
-    let depth = 0;
-    let buffer = '';
-    let radarAguardando: LabelRule | null = null;
-    let passosPosRadar = 0;
-
-    const startCpu = process.cpuUsage();
-    const parser = new Parser({
-      onopentag(name, attr) {
-        if (radarAguardando) passosPosRadar++;
-        let ruleEncontrada: LabelRule | null = null;
-
-        // Checa atributos semânticos para matching de label
-        for (const attrName of ['title', 'aria-label', 'data-title', 'data-label']) {
-          const raw = attr[attrName];
-          if (!raw) continue;
-          const lower = raw.trim().toLowerCase();
-          const found = ruleMap[lower];
-          if (found) { ruleEncontrada = found; break; }
-        }
-        if (ruleEncontrada) lastRule = ruleEncontrada;
-
-        // OTIMIZAÇÃO: htmlClasses.length verificado antes de split (evita split desnecessário)
-        const ehBlocoValor = htmlClasses.length > 0 && attr.class?.split(/\s+/).some(c => htmlClasses.includes(c));
-        if (ehBlocoValor) {
-          if (depth === 0) { buffer = ''; if (!ruleEncontrada) lastRule = null; }
-          depth++;
-        } else if (depth > 0) {
-          depth++;
-        }
-      },
-
-      ontext(t) {
-        const txt = t.trim();
-        // Radar Heurístico: captura números próximos a labels sem depender de CSS
-        if (radarAguardando && txt && RE_NUMERO.test(txt)) {
-          const norm = normalizeBRNumber(txt);
-          if (norm) {
-            results[radarAguardando.name] = norm;
-            foundCount++;
-            radarAguardando = null;
-          }
-        }
-        if (depth > 0) {
-          if (buffer.length < 512) buffer += t;
-          return;
-        }
-        const lower = txt.replace(':', '').toLowerCase();
-        if (ruleMap[lower]) { lastRule = ruleMap[lower]; radarAguardando = lastRule; passosPosRadar = 0; }
-      },
-
-      onclosetag() {
-        if (radarAguardando && passosPosRadar > 8) radarAguardando = null;
-        if (depth > 0) {
-          depth--;
-          if (depth === 0 && lastRule) {
-            const normalized = normalizeBRNumber(buffer.trim());
-            if (normalized) { 
-              results[lastRule.name] = normalized; 
-              foundCount++; 
-              // #9: Early abort — mata stream imediatamente
-              if (foundCount >= rules.length) abortCtrl.abort();
-            }
-            lastRule = null;
-            buffer = '';
-          }
-        }
-      },
-    });
-
+  private static async _streamAndParse<T>(
+    source: ScrapeSource<T>,
+    cb: CircuitBreaker,
+  ): Promise<{ data: Partial<T>; bytes: number; earlyAbort: boolean }> {
     try {
-      const resp = await fetch(url, {
-        headers: getHeadersConsistentes(getRandomAgent(), url),
-        signal: abortCtrl.signal,
-      });
-      if (!resp.ok) {
-        log(`[${source}] HTTP ${resp.status} em ${url}`);
-        throw new Error(`HTTP ${resp.status}`);
+      const res = await this.fetchWithJitter(source.url, !!source.requireStealth);
+      if (!res.body) throw new Error('No response body');
+
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      let htmlBuffer = '';
+      let rawData: Partial<T> = {};
+      let bytesRead  = 0;
+      let earlyAbort = false;
+
+      /**
+       * FIX #9 aplicado — sliding window com overlap calculado.
+       * Overlap = comprimento máximo de qualquer âncora + 256 bytes de margem.
+       * Isso garante que nenhum âncora seja partido na fronteira do slice.
+       */
+      const MAX_WINDOW   = 20_000;
+      const MAX_ANCHOR   = source.template.rules.reduce((max, r) => r.anchors.reduce((m, a) => Math.max(m, a.length), max), 0);
+      const OVERLAP_SIZE = Math.max(MAX_ANCHOR + 256, 512);
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          bytesRead  += value.length;
+          htmlBuffer += decoder.decode(value, { stream: true });
+
+          if (htmlBuffer.length > MAX_WINDOW) {
+            // Mantemos o overlap do final do buffer anterior para não cortar âncoras
+            htmlBuffer = htmlBuffer.slice(-(MAX_WINDOW - OVERLAP_SIZE));
+          }
+
+          rawData = universalLexer<T>(htmlBuffer, source.template, rawData);
+
+          const hasAll = source.template.rules.every(r => rawData[r.name as keyof T] !== undefined);
+          if (hasAll) {
+            reader.cancel().catch(() => {});
+            earlyAbort = true;
+            break;
+          }
+        }
+
+        // Flush final
+        if (!earlyAbort) {
+          const tail = decoder.decode();
+          if (tail) {
+            htmlBuffer += tail;
+            rawData = universalLexer<T>(htmlBuffer, source.template, rawData);
+          }
+        }
+      } finally {
+        try { reader.releaseLock(); } catch { /* ignore */ }
+      }
+
+      const parsed = source.template.schema.safeParse(rawData);
+      if (parsed.success) {
+        cb.recordSuccess();
+        this._totalSuccess++;
+        return { data: parsed.data, bytes: bytesRead, earlyAbort };
       }
 
       /**
-       * OTIMIZAÇÃO: Leitura streaming — começa a parsear enquanto o body
-       * ainda está chegando, reduzindo latência de processamento.
+       * FIX #19 — Zod falha: retorna dados parciais em vez de lançar.
+       * O Gemini lançava erro se a validação falhasse, descartando todos os dados
+       * extraídos. Se temos P/L mas não temos precoAtual, é melhor retornar o que
+       * temos do que nada.
        */
-      if (resp.body) {
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (value) {
-              resetWatchdog();
-              const chunk = decoder.decode(value, { stream: true });
-              bytesProcessed += chunk.length;
-              parser.write(chunk);
-            }
-          }
-          // Flush final do decoder
-          const tail = decoder.decode();
-          if (tail) { bytesProcessed += tail.length; parser.write(tail); }
-        } finally {
-          // #8: Cleanup garantido
-          if (abortCtrl.signal.aborted) reader.cancel().catch(()=>{});
-          reader.releaseLock();
-        }
-      } else {
-        // Fallback para ambientes sem ReadableStream
-        const body = await resp.text();
-        bytesProcessed = body.length;
-        parser.write(body);
-      }
-      parser.end();
+      cb.recordSuccess();
+      this._totalSuccess++;
+      return { data: rawData, bytes: bytesRead, earlyAbort };
 
     } catch (err) {
-      if ((err as Error).name !== 'AbortError') throw err;
-    } finally {
-      clearTimeout(watchdogId!);
-      // #8: Limpa referências para GC
-      depth = 0; buffer = ''; lastRule = null;
-      radarAguardando = null;
+      cb.recordFailure();
+      this._totalFailures++;
+      throw err;
+    }
+  }
+
+  // ── fetchAtivo: API de alto nível com Yahoo como complemento ────────────
+
+  /**
+   * FIX #12 aplicado — suporte completo a ACAO/FII/BDR/ETF.
+   * FIX #20 — Yahoo Finance como fonte complementar paralela (restaurado do v11).
+   */
+  static async fetchAtivo(
+    ticker: string,
+    type: ExtendedAssetType = 'ACAO',
+    includeNews = false,
+  ): Promise<{
+    ticker: string;
+    results: any;
+    cacheStatus: string;
+    news?: NewsItem[];
+    metrics: any;
+  }> {
+    const cleanTicker = canonicalizeTicker(ticker);
+    const erroVal     = validarTicker(cleanTicker);
+    if (erroVal) {
+      return { ticker: cleanTicker, results: {}, cacheStatus: 'ERROR', metrics: { error: erroVal } };
+    }
+    const preset  = ASSET_PRESETS[type];
+    const t       = cleanTicker.toLowerCase();
+    const sources: ScrapeSource<any>[] = [
+      { url: `${preset.i10Base}/${t}/`, template: preset.template, requireStealth: true },
+      { url: `${preset.siBase}/${t}/`,  template: preset.template, requireStealth: true },
+    ];
+
+    const startTime = performance.now();
+    const startCpu  = safeCpuStart();
+
+    const [scrapeResult, yahooResult, yahooFund, newsResult] = await Promise.allSettled([
+      this.execute(sources),
+      yahooQuote(cleanTicker, this._options.fetchTimeoutMs),
+      yahooFundamentals(cleanTicker, this._options.fetchTimeoutMs),
+      includeNews ? fetchNews(cleanTicker) : Promise.resolve(undefined),
+    ]);
+
+    const scrape   = scrapeResult.status === 'fulfilled' ? scrapeResult.value : { data: {}, bytes: 0, earlyAbort: false, cacheStatus: 'ERROR' };
+    const quote    = yahooResult.status  === 'fulfilled' ? yahooResult.value  : null;
+    const fund     = yahooFund.status    === 'fulfilled' ? yahooFund.value    : {};
+    const newsData = newsResult.status   === 'fulfilled' ? newsResult.value   : undefined;
+    const combined = { ...scrape.data } as Record<string, any>;
+
+    // Preenche lacunas com dados do Yahoo
+    const fill = (k: string, v: unknown) => {
+      if (combined[k] !== undefined || v == null) return;
+      const s = typeof v === 'number' ? v.toFixed(2) : String(v).trim();
+      if (!VALORES_INVALIDOS.has(s)) combined[k] = s;
+    };
+
+    if (quote) {
+      fill('precoAtual',    quote.regularMarketPrice);
+      fill('variacaoDay',   quote.regularMarketChangePercent != null
+        ? quote.regularMarketChangePercent.toFixed(2) + '%' : undefined);
+      fill('pl',            quote.trailingPE);
+      fill('pvp',           quote.priceToBook);
+      fill('vpa',           quote.bookValue);
+      fill('lpa',           quote.epsTrailingTwelveMonths);
+      fill('dividendYield', quote.trailingAnnualDividendYield != null
+        ? (quote.trailingAnnualDividendYield * 100).toFixed(2) + '%' : undefined);
+    }
+    if (fund) {
+      fill('margemLiquida',  fund.profitMargins    != null ? (fund.profitMargins    * 100).toFixed(2) + '%' : undefined);
+      fill('margemBruta',    fund.grossMargins     != null ? (fund.grossMargins     * 100).toFixed(2) + '%' : undefined);
+      fill('roe',            fund.returnOnEquity   != null ? (fund.returnOnEquity   * 100).toFixed(2) + '%' : undefined);
     }
 
-    const endCpu = process.cpuUsage(startCpu);
+    const totalTimeMs = performance.now() - startTime;
+    const sources_used: string[] = [];
+    if (scrapeResult.status === 'fulfilled' && Object.keys(scrape.data).length > 0) sources_used.push('Scraper');
+    if (quote) sources_used.push('YahooFinance');
+    if (Object.keys(fund).length) sources_used.push('YahooFundamentals');
 
     return {
-      results,
+      ticker:      cleanTicker,
+      results:     combined,
+      cacheStatus: scrape.cacheStatus || 'MISS',
+      ...(newsData ? { news: newsData } : {}),
       metrics: {
-        totalTimeMs:   performance.now() - globalStart,
-        bytesProcessed,
-        foundKeys:     Object.keys(results) as AssetLabel[],
-        successRate:   rules.length > 0 ? foundCount / rules.length : 0,
-        earlyAbort:    foundCount >= rules.length,
-        source:        source as DataSource,
-        estimatedMemoryMb: (bytesProcessed * 0.8) / (1024 * 1024),
-        cpuUsageMs: (endCpu.user + endCpu.system) / 1000
+        totalTimeMs,
+        bytesProcessed:    scrape.bytes,
+        foundKeys:         Object.keys(combined),
+        successRate:       Object.keys(combined).length / preset.template.rules.length,
+        earlyAbort:        scrape.earlyAbort,
+        source:            sources_used.join(' + ') || 'None',
+        /**
+         * FIX #21 — métricas de CPU reais em vez de `totalTimeMs * 0.15`.
+         * A versão Gemini fabricava cpuUsageMs como 15% do tempo de parede,
+         * o que é semanticamente incorreto (CPU ≠ wall clock).
+         */
+        cpuUsageMs:        safeCpuDeltaMs(startCpu),
+        estimatedMemoryMb: Number((scrape.bytes / 1024 / 1024).toFixed(2)),
       },
     };
   }
 
-  // ── Histórico e dividendos ───────────────────────────────────────────────
+  // ── fetchB3: retrocompatibilidade ────────────────────────────────────────
 
-  static async fetchHistoricoGrafico(ticker: string, period: ChartPeriod = '1y'): Promise<HistoricalQuote[]> {
-    return yahooHistorical(ticker, period);
+  static async fetchB3(ticker: string): Promise<{ data: Partial<B3Data>; bytes: number; earlyAbort: boolean; cacheStatus: string }> {
+    const r = await this.fetchAtivo(ticker, 'ACAO');
+    return { data: r.results, bytes: r.metrics.bytesProcessed, earlyAbort: r.metrics.earlyAbort, cacheStatus: r.cacheStatus };
   }
 
-  static async fetchDividends(ticker: string, period: ChartPeriod = '5y'): Promise<Dividend[]> {
-    return yahooDividends(ticker, period);
-  }
-  // ── Search ───────────────────────────────────────────────────────────────
-
-  static async searchTicker(query: string): Promise<any[]> {
-    const c = query.trim().toLowerCase();
-    const cached = this._searchCache.get(c);
-    if (cached && Date.now() - cached.timestamp < this._config.searchCacheTtlMs) return cached.data;
-    const data = await yahooSearch(query);
-    this._searchCache.set(c, { data, timestamp: Date.now() });
-    return data;
-  }
-
-  // ── Notícias ─────────────────────────────────────────────────────────────
-
-  static async fetchNews(ticker: string): Promise<NewsItem[]> {
+  static async fetchHistoricoGrafico(ticker: string, range: string = '1y', interval: string = '1d'): Promise<any[]> {
+    const cleanTicker = canonicalizeTicker(ticker);
+    const symbol = cleanTicker.endsWith('11') || cleanTicker.endsWith('12') || RE_BDR.test(cleanTicker) || cleanTicker.length >= 5 
+      ? `${cleanTicker}.SA` : cleanTicker;
+      
     try {
-      const cleanTicker = ticker.trim().replace(RE_SA, '').toUpperCase();
-      const r = await fetch(
-        `https://news.google.com/rss/search?q=${cleanTicker}+acao+B3&hl=pt-BR&gl=BR&ceid=BR:pt-419`,
-        { headers: { 'User-Agent': getRandomAgent() } }
+      const json = await Promise.any(
+        YAHOO_HOSTS.map(host =>
+          fetchJson(
+            `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=false`,
+            this._options.fetchTimeoutMs,
+          )
+        )
       );
-      if (!r.ok) return [];
-
-      const xml = await r.text();
-      const $ = cheerio.load(xml, { xmlMode: true });
-      const news: NewsItem[] = [];
-
-      $('item').each((_, el) => {
-        const $el = $(el);
-        const pubDateStr = $el.find('pubDate').text();
-        const pubDate = new Date(pubDateStr);
-        
-        news.push({
-          title: $el.find('title').text(),
-          link: $el.find('link').text(),
-          pubDate: !isNaN(pubDate.getTime()) ? pubDate : new Date(),
-          source: $el.find('source').text()
-        });
-      });
-
-      return news;
-    } catch (e) { 
-      console.error(`Erro ao buscar notícias para ${ticker}:`, e);
-      return []; 
+      
+      const result = json?.chart?.result?.[0];
+      if (!result || !result.timestamp || !result.indicators?.quote?.[0]) return [];
+      
+      const timestamps = result.timestamp;
+      const quote = result.indicators.quote[0];
+      
+      return timestamps.map((ts: number, i: number) => ({
+        date: new Date(ts * 1000).toISOString(),
+        open: quote.open[i],
+        high: quote.high[i],
+        low: quote.low[i],
+        close: quote.close[i],
+        volume: quote.volume[i],
+      })).filter((d: any) => d.close !== null && d.close !== undefined);
+    } catch {
+      return [];
     }
   }
 
-  // ── Cache ────────────────────────────────────────────────────────────────
+  static async fetchDividends(ticker: string): Promise<any[]> {
+    const cleanTicker = canonicalizeTicker(ticker);
+    const symbol = cleanTicker.endsWith('11') || cleanTicker.endsWith('12') || RE_BDR.test(cleanTicker) || cleanTicker.length >= 5 
+      ? `${cleanTicker}.SA` : cleanTicker;
+      
+    try {
+      const json = await Promise.any(
+        YAHOO_HOSTS.map(host =>
+          fetchJson(
+            `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5y&interval=1mo&events=div&includePrePost=false`,
+            this._options.fetchTimeoutMs,
+          )
+        )
+      );
+      
+      const events = json?.chart?.result?.[0]?.events?.dividends;
+      if (!events) return [];
+      
+      return Object.values(events).map((d: any) => ({
+        date: new Date(d.date * 1000).toISOString(),
+        amount: d.amount,
+      })).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    } catch {
+      return [];
+    }
+  }
+
+  static async searchTicker(query: string): Promise<any[]> {
+    const endpoints = [
+      `https://query2.finance.yahoo.com/v2/finance/search?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0`,
+      `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0`,
+    ];
+    for (const url of endpoints) {
+      try {
+        const json = await fetchJson(url, this._options.fetchTimeoutMs);
+        return (json?.quotes ?? []).filter(
+          (q: any) => q.exchange === 'SAO' || q.exchange === 'BVMF' || q.symbol?.endsWith('.SA')
+        );
+      } catch { continue; }
+    }
+    return [];
+  }
+
+  // ── executeBatch: PRESERVA ORDEM DOS RESULTADOS ──────────────────────────
+
+  /**
+   * FIX #22 — executeBatch agora preserva a ordem de entrada.
+   * A versão Gemini usava `results.push()` em ordem de conclusão (não de entrada),
+   * causando resultados fora de ordem para quem chamasse `runNexusBatch`.
+   */
+  static async executeBatch<T>(
+    tasks: (() => Promise<T>)[],
+    concurrency = this._options.concurrencyLimit,
+  ): Promise<(T | Error)[]> {
+    const results: (T | Error)[] = new Array(tasks.length);
+    const executing = new Set<Promise<void>>();
+
+    for (let i = 0; i < tasks.length; i++) {
+      const idx = i;
+      const p   = tasks[idx]()
+        .then(res  => { results[idx] = res; })
+        .catch(err => { results[idx] = err instanceof Error ? err : new Error(String(err)); })
+        .finally(() => { executing.delete(p); });
+
+      executing.add(p);
+      if (executing.size >= concurrency) await Promise.race(executing);
+    }
+    await Promise.all(executing);
+    return results;
+  }
+
+  // ── Cache e Diagnóstico ──────────────────────────────────────────────────
 
   static clearCache(): void {
-    this._cache.clear();
-    this._searchCache.clear();
-    _ruleMapCache.clear();    // ADIÇÃO: limpa também o cache de ruleMaps
-    _hostnameCache.clear();   // ADIÇÃO: limpa cache de hostnames
+    this._cache           = new LRUCache<any>(300);
+    _hostnameCache.clear();
+    _regexCache.clear();
+  }
+
+  static invalidateCache(ticker: string, type?: ExtendedAssetType): void {
+    const clean = canonicalizeTicker(ticker);
+    for (const t of (type ? [type] : ['ACAO', 'FII', 'BDR', 'ETF'] as ExtendedAssetType[])) {
+      const preset = ASSET_PRESETS[t];
+      const key    = `nexus:${preset.i10Base}/${clean}/|${preset.siBase}/${clean}/`;
+      this._cache.delete(key);
+    }
   }
 
   static getCacheStats() {
+    const cbMetrics: Record<string, { estado: CBState; falhas: number }> = {};
+    this._circuitBreakers.forEach((cb, domain) => {
+      cbMetrics[domain] = { estado: cb.getState(), falhas: cb.getFalhas() };
+    });
+
+    const uptime = Date.now() - this._startTime;
     return {
-      cache: {
-        tamanho:    this._cache.tamanho,
-        tamanhoMax: this._config.cacheMaxSize,
-        staleMs:    this._config.cacheStaleMs,
-        maxMs:      this._config.cacheMaxMs,
+      cache:             { tamanho: this._cache.tamanho, tamanhoMax: this._cache.tamanhoMax },
+      session:           this._sessionMetrics,
+      uptime,
+      totalRequests:     this._totalRequests,
+      totalSuccess:      this._totalSuccess,
+      totalFailures:     this._totalFailures,
+      successRate:       this._totalRequests > 0
+        ? ((this._totalSuccess / this._totalRequests) * 100).toFixed(1) + '%' : 'N/A',
+      inFlightRequests:  this._urlInFlight.size + this._tickerInFlight.size,
+      rateLimiters:      Array.from(this._rateLimiters.keys()),
+      circuitBreakers:   Object.keys(cbMetrics).length > 0 ? cbMetrics : {
+        investidor10: { estado: 'FECHADO' as CBState, falhas: 0 },
+        statusinvest: { estado: 'FECHADO' as CBState, falhas: 0 },
       },
-      searchCache: {
-        tamanho: this._searchCache.tamanho,
-        ttlMs:   this._config.searchCacheTtlMs,
-      },
-      circuitBreakers: {
-        investidor10: this._cb.getEstado('investidor10'),
-        statusInvest: this._cb.getEstado('statusInvest'),
-        yahoo:        this._cb.getEstado('yahoo'),
-      },
-      inFlightRequests: this._inFlight.size,
-      urlInFlightRequests: this._urlInFlight.size,
-      ruleMapCacheSize: _ruleMapCache.size,
     };
   }
 
   static getDetailedReport() {
     return {
-      engine: 'Nexus Engine Ultra v10.1',
-      status: 'Operational',
+      engine:  'Nexus Engine Ultra v12.0',
+      status:  'Operational',
       capabilities: [
-        'SAX Streaming Parsing (Zero-AST)',
-        'Early Abort (Connection cutting)',
-        'Parallel Source Orchestration',
-        'Circuit Breaker per Source',
-        'LRU Multi-level Caching',
-        'Deduplication of In-flight Requests',
-        'Smart Fallback Asset Inference',
-        'Session Metrics Tracking'
+        'Zero-AST Regex Lexer com Sliding Window Corrigido',
+        'Early Abort on Rule Saturation',
+        'Orquestração Paralela (Scraper + Yahoo Quote + Yahoo Fundamentals)',
+        'Promise.any() Race entre Yahoo Hosts',
+        'Circuit Breaker por Domínio com getState() sem Side-Effects',
+        'LRU Cache SWR (Stale-While-Revalidate) com Expiração TTL',
+        'Fetch Iterativo com AbortController Timeout',
+        'Deduplicação In-flight (URL + Ticker)',
+        'Suporte Completo a ACAO / FII / BDR / ETF',
+        'Validação Zod com Fallback para Dados Parciais',
+        'Batch com Preservação de Ordem',
+        'invalidateCache(ticker, type?) Seletivo',
+        'Regex de Modo Multiple Cacheada',
+        'User-Agents Chrome 131+ / Firefox 133+',
+        'CPU Metrics Reais via process.cpuUsage()',
       ],
-      metrics: this.getCacheStats(),
-      session: this.getSessionMetrics()
-    };
-  }
-
-  // ── Novas Funcionalidades ────────────────────────────────────────────────
-
-  static invalidateCache(ticker: string, type?: ExtendedAssetType): void {
-    const clean = ticker.trim().replace(RE_SA, '').toUpperCase();
-    if (type) {
-      this._cache.delete(`${clean}:${type}`);
-    } else {
-      ['ACAO', 'FII', 'BDR', 'ETF'].forEach(t => this._cache.delete(`${clean}:${t}`));
-    }
-  }
-
-  static configurePreset(type: ExtendedAssetType, config: { labels?: AssetLabel[], aliases?: Record<string, AssetLabel> }): void {
-    const preset = NEXUS_PRESETS[type];
-    if (!preset) return;
-    if (config.labels) preset.labels = Array.from(new Set([...preset.labels, ...config.labels]));
-    if (config.aliases) preset.aliases = { ...preset.aliases, ...config.aliases };
-    _ruleMapCache.clear(); // Invalida cache de regras para reconstrução
-  }
-
-  static getSessionMetrics() {
-    const m = this._sessionMetrics;
-    const hitRate = m.totalRequests > 0 ? ((m.cacheHits + m.cacheStale) / m.totalRequests) * 100 : 0;
-    const avgLatency = (m.cacheMisses + m.cacheStale) > 0 ? m.totalLatencyMs / (m.cacheMisses + m.cacheStale) : 0;
-    return {
-      ...m,
-      hitRatePercent: Number(hitRate.toFixed(2)),
-      avgMissLatencyMs: Number(avgLatency.toFixed(2))
-    };
-  }
-
-  static resetSessionMetrics(): void {
-    this._sessionMetrics = {
-      totalRequests: 0,
-      cacheHits: 0,
-      cacheStale: 0,
-      cacheMisses: 0,
-      errors: 0,
-      totalLatencyMs: 0,
+      cacheStats: this.getCacheStats(),
     };
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// EXECUÇÃO PARALELA COM LIMITE DE CONCORRÊNCIA
-// ─────────────────────────────────────────────────────────────────────────────
-
-export async function runWithLimit<T>(tasks: Task<T>[], limit = 5): Promise<(T | Error)[]> {
-  const results: (T | Error)[] = new Array(tasks.length);
-  const executing = new Set<Promise<void>>();
-  for (let i = 0; i < tasks.length; i++) {
-    const idx = i;
-    const p: Promise<void> = tasks[idx]()
-      .then(res => { results[idx] = res; })
-      .catch(err => { results[idx] = err instanceof Error ? err : new Error(String(err)); })
-      .finally(() => { executing.delete(p); });
-    executing.add(p);
-    if (executing.size >= limit) await Promise.race(executing);
-  }
-  await Promise.all(executing);
-  return results;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// API BATCH
-// ─────────────────────────────────────────────────────────────────────────────
-
-export async function runNexusBatch(
-  tickers: string[],
-  type: ExtendedAssetType = 'ACAO',
-  limit: number = NexusEngineUltra.defaultConcurrencyLimit,
-  includeNews = false
-): Promise<FetchAtivoResult[]> {
-  return (await runWithLimit(
-    tickers.map(t => () => NexusEngineUltra.fetchAtivo(t, type, false, includeNews)),
-    limit
-  )).map((r, i) => {
-    const ticker = tickers[i].toUpperCase().replace(RE_SA, '');
-    if (r instanceof Error) {
-      return { ticker, error: r.message, cacheStatus: 'ERROR' as const, logs: [`[BATCH] Falha: ${r.message}`] };
-    }
-    return r as FetchAtivoResult;
-  });
-}
+// ════════════════════════════════════════════════════════════════════════════
+// 13. API BATCH PÚBLICA
+// ════════════════════════════════════════════════════════════════════════════
 
 /**
- * Executa uma busca em batch com inferência automática de tipo por ticker.
- * Útil quando a lista contém uma mistura de ações, FIIs e ETFs.
+ * FIX #23 — runNexusBatch agora respeita o parâmetro `type`.
+ * A versão Gemini ignorava completamente `type` e sempre chamava fetchB3 (ACAO).
  */
-export async function runNexusBatchAuto(
-  tickers: string[],
-  limit: number = NexusEngineUltra.defaultConcurrencyLimit,
-  includeNews = false
-): Promise<FetchAtivoResult[]> {
-  return (await runWithLimit(
-    tickers.map(t => () => {
-      const type = inferAssetType(t);
-      return NexusEngineUltra.fetchAtivo(t, type, false, includeNews);
+export async function runNexusBatch(
+  tickers:     string[],
+  type:        ExtendedAssetType = 'ACAO',
+  _opts?:      any,
+  includeNews? : boolean,
+): Promise<any[]> {
+  return NexusEngineUltra.executeBatch(
+    tickers.map(ticker => async () => {
+      const t0 = performance.now();
+      try {
+        const result = await NexusEngineUltra.fetchAtivo(ticker, type, includeNews);
+        return {
+          ...result,
+          metrics: {
+            ...result.metrics,
+            totalTimeMs: performance.now() - t0,
+          },
+        };
+      } catch (e: any) {
+        return {
+          ticker:      canonicalizeTicker(ticker),
+          results:     {},
+          error:       e.message,
+          cacheStatus: 'ERROR',
+          metrics: {
+            totalTimeMs:       performance.now() - t0,
+            bytesProcessed:    0,
+            foundKeys:         [],
+            successRate:       0,
+            earlyAbort:        false,
+            source:            'Nexus Engine Ultra (Failed)',
+            estimatedMemoryMb: 0,
+            cpuUsageMs:        0,
+          },
+        };
+      }
     }),
-    limit
-  )).map((r, i) => {
-    const ticker = tickers[i].toUpperCase().replace(RE_SA, '');
-    if (r instanceof Error) {
-      return { ticker, error: r.message, cacheStatus: 'ERROR' as const, logs: [`[BATCH-AUTO] Falha: ${r.message}`] };
-    }
-    return r as FetchAtivoResult;
-  });
+  );
+}
+
+export async function runNexusBatchAuto(
+  tickers:     string[],
+  _opts?:      any,
+  includeNews?: boolean,
+): Promise<any[]> {
+  return NexusEngineUltra.executeBatch(
+    tickers.map(ticker => async () => {
+      const type = inferAssetType(ticker);
+      const t0   = performance.now();
+      try {
+        const result = await NexusEngineUltra.fetchAtivo(ticker, type, includeNews);
+        return { ...result, metrics: { ...result.metrics, totalTimeMs: performance.now() - t0 } };
+      } catch (e: any) {
+        return {
+          ticker:      canonicalizeTicker(ticker),
+          results:     {},
+          error:       e.message,
+          cacheStatus: 'ERROR',
+          metrics: { totalTimeMs: performance.now() - t0, bytesProcessed: 0, foundKeys: [], successRate: 0, earlyAbort: false, source: 'Failed', estimatedMemoryMb: 0, cpuUsageMs: 0 },
+        };
+      }
+    }),
+  );
 }

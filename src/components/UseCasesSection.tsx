@@ -28,11 +28,13 @@ export function UseCasesSection() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       {cases.map((item, i) => (
-        <div key={i} className="glass rounded-3xl border border-slate-800/50 p-6 shadow-2xl card-shadow card-hover flex flex-col">
-          <div className="p-3 bg-slate-800/50 rounded-2xl border border-slate-700/50 w-fit mb-5">
-            {item.icon}
+        <div key={i} className="glass rounded-2xl border border-slate-800/50 p-5 shadow-lg card-hover flex flex-col">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 bg-slate-800/50 rounded-lg border border-slate-700/50 shrink-0">
+              {React.cloneElement(item.icon as React.ReactElement, { className: "w-5 h-5 " + (item.icon as React.ReactElement).props.className.split(' ').find((c: string) => c.startsWith('text-')) })}
+            </div>
+            <h3 className="font-bold text-white font-display text-base leading-tight">{item.title}</h3>
           </div>
-          <h3 className="font-bold text-white font-display mb-3 text-lg">{item.title}</h3>
           <p className="text-xs text-slate-400 leading-relaxed flex-1">{item.desc}</p>
         </div>
       ))}

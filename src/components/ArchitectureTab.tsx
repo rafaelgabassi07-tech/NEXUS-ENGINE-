@@ -12,7 +12,7 @@ export function ArchitectureTab() {
       items: [
         { name: "HTTP/2 & Pipeline", desc: "Multiplexação de requisições." },
         { name: "Radar Heurístico", desc: "Rotação dinâmica de UA." },
-        { name: "Early Abort", desc: "Corte imediato pós-captura." }
+        { name: "Deduplicação", desc: "Bloqueio de requisições em voo." }
       ]
     },
     {
@@ -20,19 +20,19 @@ export function ArchitectureTab() {
       icon: <Cpu className="w-5 h-5" />,
       color: "emerald",
       items: [
-        { name: "SAX Stream", desc: "Processamento em tempo real." },
-        { name: "Zero-AST", desc: "Extração sem árvore DOM." },
-        { name: "Sanitização", desc: "Normalização em buffer." }
+        { name: "SAX Stream", desc: "Lexer de alta velocidade." },
+        { name: "Zero-AST", desc: "Processamento sem árvore DOM." },
+        { name: "Zod Schema", desc: "Validação rigorosa de tipos." }
       ]
     },
     {
-      title: "Cache & Opt",
+      title: "Resiliência",
       icon: <Zap className="w-5 h-5" />,
       color: "indigo",
       items: [
-        { name: "Cache SWR", desc: "Entrega instantânea." },
-        { name: "Warm Start", desc: "Pré-aquecimento de conexões." },
-        { name: "Backoff", desc: "Retentativas inteligentes." }
+        { name: "Circuit Breaker", desc: "Estado: Fechado/Aberto/Semi." },
+        { name: "Jitter & Backoff", desc: "Retentativas exponenciais." },
+        { name: "SWR Cache", desc: "Stale-While-Revalidate (LRU)." }
       ]
     }
   ];
@@ -46,11 +46,11 @@ export function ArchitectureTab() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight font-display text-white">Arquitetura Nexus</h2>
-          <p className="text-slate-400 mt-1 text-sm font-light">Infraestrutura de alto desempenho v9.0-Ultra.</p>
+          <p className="text-slate-400 mt-1 text-sm font-light">Infraestrutura de alto desempenho v10.1-Ultra.</p>
         </div>
         <div className="flex items-center gap-2 px-4 py-2 bg-blue-600/10 border border-blue-500/20 rounded-xl backdrop-blur-md">
           <Cpu className="w-4 h-4 text-blue-400" />
-          <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Engine v9.0</span>
+          <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Engine v10.1</span>
         </div>
       </div>
 
@@ -63,16 +63,17 @@ export function ArchitectureTab() {
             transition={{ delay: i * 0.05 }}
             className="glass-dark border border-white/5 rounded-3xl p-6 card-hover flex flex-col"
           >
-            <div className={cn(
-              "w-10 h-10 rounded-xl mb-4 flex items-center justify-center border shadow-sm",
-              layer.color === 'blue' ? "bg-blue-500/10 border-blue-500/20 text-blue-400" :
-              layer.color === 'emerald' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" :
-              "bg-indigo-500/10 border-indigo-500/20 text-indigo-400"
-            )}>
-              {layer.icon}
+            <div className="flex items-center gap-3 mb-4">
+              <div className={cn(
+                "w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm shrink-0",
+                layer.color === 'blue' ? "bg-blue-500/10 border-blue-500/20 text-blue-400" :
+                layer.color === 'emerald' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" :
+                "bg-indigo-500/10 border-indigo-500/20 text-indigo-400"
+              )}>
+                {layer.icon}
+              </div>
+              <h3 className="text-lg font-bold text-white font-display tracking-tight leading-tight">{layer.title}</h3>
             </div>
-            
-            <h3 className="text-lg font-bold text-white font-display mb-4 tracking-tight">{layer.title}</h3>
             
             <div className="space-y-4 flex-1">
               {layer.items.map((item, j) => (
@@ -118,11 +119,11 @@ export function ArchitectureTab() {
             </thead>
             <tbody className="divide-y divide-white/5">
               {[
-                { feature: "Parsing", old: "DOM (Cheerio)", new: "SAX (htmlparser2)", highlight: true },
-                { feature: "Memória", old: "O(n)", new: "O(1)", highlight: false },
-                { feature: "Latência", old: "3.2s", new: "280ms", highlight: true },
-                { feature: "Concorrência", old: "Sequencial", new: "Batching", highlight: false },
-                { feature: "Early Abort", old: "Não", new: "Sim", highlight: true }
+                { feature: "Parsing", old: "DOM (Cheerio)", new: "SAX (Zero-AST)", highlight: true },
+                { feature: "Memória", old: "O(n)", new: "O(1) Streaming", highlight: false },
+                { feature: "Integridade", old: "Loose (Any)", new: "Strict (Zod)", highlight: true },
+                { feature: "Resiliência", old: "Retry Simples", new: "Stateful CB", highlight: false },
+                { feature: "Deduplicação", old: "Não", new: "Sim (In-Flight)", highlight: true }
               ].map((row, i) => (
                 <tr key={i} className="group hover:bg-white/5 transition-colors text-xs">
                   <td className="py-3 font-medium text-slate-400">{row.feature}</td>

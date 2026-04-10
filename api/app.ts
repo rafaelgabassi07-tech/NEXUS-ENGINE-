@@ -62,7 +62,7 @@ app.post("/api/scrape-v2", async (req, res) => {
       successRate: (results.filter(r => !('error' in r)).length / tickers.length) * 100,
       totalBytes: results.reduce((acc, r) => acc + (('metrics' in r) ? r.metrics.bytesProcessed : 0), 0),
       avgTimePerTicker: duration / tickers.length,
-      engineVersion: '9.0-Ultra',
+      engineVersion: '12.0-Ultra',
       report: NexusEngineUltra.getDetailedReport()
     };
 
@@ -98,20 +98,71 @@ app.post("/api/benchmark-compare", async (req, res) => {
 
     let customEndpointData = null;
     if (customEndpoint) {
+      let endpointUrl = customEndpoint;
+      if (!endpointUrl.startsWith('http')) {
+        endpointUrl = 'https://' + endpointUrl;
+      }
+
+      // WARM-UP PHASE: Wake up serverless functions (like Vercel) before starting the timer
+      console.log(`[API] Warming up Custom Endpoint to prevent cold starts: ${endpointUrl}`);
+      try {
+        const warmupTicker = tickers[0] || 'petr4';
+        if (endpointUrl.includes('{{ticker}}')) {
+          const url = endpointUrl.replace('{{ticker}}', warmupTicker.toLowerCase());
+          await fetch(url, { signal: AbortSignal.timeout(15000) });
+        } else {
+          const targetUrl = `https://statusinvest.com.br/acoes/${warmupTicker.toLowerCase()}`;
+          await fetch(endpointUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: targetUrl }),
+            signal: AbortSignal.timeout(15000)
+          });
+        }
+        console.log(`[API] Warm-up completed.`);
+      } catch (e: any) {
+        console.warn(`[API] Warm-up failed or timed out: ${e.message}`);
+      }
+
       console.log(`[API] Running Custom Endpoint: ${customEndpoint}`);
       const customStart = performance.now();
       const customResults = await Promise.all(tickers.map(async (ticker) => {
         const tStart = performance.now();
         try {
-          const url = customEndpoint.replace('{{ticker}}', ticker.toLowerCase());
-          const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
-          const data = await response.text();
-          return {
-            ticker,
-            time: performance.now() - tStart,
-            success: response.ok,
-            size: data.length
-          };
+          let response;
+          let data;
+          
+          if (endpointUrl.includes('{{ticker}}')) {
+            const url = endpointUrl.replace('{{ticker}}', ticker.toLowerCase());
+            response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+            const ttfb = performance.now() - tStart;
+            data = await response.text();
+            return {
+              ticker,
+              time: performance.now() - tStart,
+              ttfb,
+              success: response.ok,
+              size: data.length
+            };
+          } else {
+            // Assume it's a POST endpoint like Aero Scraper
+            const targetUrl = `https://statusinvest.com.br/acoes/${ticker.toLowerCase()}`;
+            response = await fetch(endpointUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: targetUrl }),
+              signal: AbortSignal.timeout(15000)
+            });
+            const ttfb = performance.now() - tStart;
+            data = await response.text();
+            return {
+              ticker,
+              time: performance.now() - tStart,
+              ttfb,
+              success: response.ok,
+              size: data.length
+            };
+          }
         } catch (e: any) {
           return { ticker, time: performance.now() - tStart, success: false, error: e.message };
         }
