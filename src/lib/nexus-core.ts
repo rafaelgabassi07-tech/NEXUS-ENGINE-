@@ -158,10 +158,10 @@ export async function fetchNews(ticker: string): Promise<NewsItem[]> {
     
     while ((match = itemRegex.exec(xml)) !== null && items.length < 5) {
       const itemXml = match[1];
-      const titleMatch = /<title>([^<]*)<\/title>/.exec(itemXml);
-      const linkMatch = /<link>([^<]*)<\/link>/.exec(itemXml);
-      const pubDateMatch = /<pubDate>([^<]*)<\/pubDate>/.exec(itemXml);
-      const sourceMatch = /<source[^>]*>([^<]*)<\/source>/.exec(itemXml);
+      const titleMatch = /<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/.exec(itemXml);
+      const linkMatch = /<link>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/.exec(itemXml);
+      const pubDateMatch = /<pubDate>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/pubDate>/.exec(itemXml);
+      const sourceMatch = /<source[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/source>/.exec(itemXml);
       
       if (titleMatch && linkMatch) {
         items.push({
@@ -519,10 +519,12 @@ export const FIISchema = z.object({
 });
 
 export const ETFSchema = z.object({
-  precoAtual:    z.union([z.number(), z.string()]).optional(),
-  dividendYield: z.string().optional(),
-  pvp:           z.union([z.number(), z.string()]).optional(),
-  variacaoDay:   z.string().optional(),
+  precoAtual:        z.union([z.number(), z.string()]).optional(),
+  dividendYield:     z.string().optional(),
+  pvp:               z.union([z.number(), z.string()]).optional(),
+  patrimonioLiquido: z.union([z.number(), z.string()]).optional(),
+  taxaAdmin:         z.string().optional(),
+  variacaoDay:       z.string().optional(),
 });
 
 export type B3Data  = z.infer<typeof B3Schema>;
@@ -578,9 +580,14 @@ export const bdrTemplate  = acaoTemplate;
 export const etfTemplate: ExtractorTemplate<ETFData> = {
   name: 'B3_ETF',
   schema: ETFSchema,
-  rules: acaoTemplate.rules.filter(r =>
-    ['precoAtual', 'dividendYield', 'pvp', 'variacaoDay'].includes(r.name)
-  ),
+  rules: [
+    { name: 'precoAtual',        anchors: ['Preço Atual', 'Cotação'],              extractRegex: />\s*([R$]*\s*[\d,.]+)\s*</,  formatter: COMMON_FORMATTERS.num },
+    { name: 'dividendYield',     anchors: ['Dividend Yield', 'DY', 'Yield'],       extractRegex: />\s*([\d,.]+\s*%?)\s*</,      formatter: COMMON_FORMATTERS.pct },
+    { name: 'pvp',               anchors: ['P/VP'],                                 extractRegex: />\s*([\d,.-]+)\s*</,          formatter: COMMON_FORMATTERS.num },
+    { name: 'patrimonioLiquido', anchors: ['Patrimônio Líquido', 'Patrimônio'],     extractRegex: />\s*([\d,.]+[KMB]?)\s*</, formatter: COMMON_FORMATTERS.num },
+    { name: 'taxaAdmin',         anchors: ['Taxa de Administração', 'Taxa Admin'],  extractRegex: />\s*([\d,.]+\s*%?)\s*</, formatter: COMMON_FORMATTERS.pct },
+    { name: 'variacaoDay',       anchors: ['Variação', 'variacao'],                 extractRegex: />\s*([+-]?[\d,.]+\s*%?)\s*</, formatter: COMMON_FORMATTERS.pct },
+  ],
 };
 
 /**
@@ -1092,63 +1099,67 @@ export class NexusEngineUltra {
 
   static async fetchHistoricoGrafico(ticker: string, range: string = '1y', interval: string = '1d'): Promise<any[]> {
     const cleanTicker = canonicalizeTicker(ticker);
-    const symbol = cleanTicker.endsWith('11') || cleanTicker.endsWith('12') || RE_BDR.test(cleanTicker) || cleanTicker.length >= 5 
-      ? `${cleanTicker}.SA` : cleanTicker;
+    const symbols = [`${cleanTicker}.SA`, cleanTicker];
       
-    try {
-      const json = await Promise.any(
-        YAHOO_HOSTS.map(host =>
-          fetchJson(
-            `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=false`,
-            this._options.fetchTimeoutMs,
+    for (const symbol of symbols) {
+      try {
+        const json = await Promise.any(
+          YAHOO_HOSTS.map(host =>
+            fetchJson(
+              `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=false`,
+              this._options.fetchTimeoutMs,
+            )
           )
-        )
-      );
-      
-      const result = json?.chart?.result?.[0];
-      if (!result || !result.timestamp || !result.indicators?.quote?.[0]) return [];
-      
-      const timestamps = result.timestamp;
-      const quote = result.indicators.quote[0];
-      
-      return timestamps.map((ts: number, i: number) => ({
-        date: new Date(ts * 1000).toISOString(),
-        open: quote.open[i],
-        high: quote.high[i],
-        low: quote.low[i],
-        close: quote.close[i],
-        volume: quote.volume[i],
-      })).filter((d: any) => d.close !== null && d.close !== undefined);
-    } catch {
-      return [];
+        );
+        
+        const result = json?.chart?.result?.[0];
+        if (!result || !result.timestamp || !result.indicators?.quote?.[0]) continue;
+        
+        const timestamps = result.timestamp;
+        const quote = result.indicators.quote[0];
+        
+        return timestamps.map((ts: number, i: number) => ({
+          date: new Date(ts * 1000).toISOString(),
+          open: quote.open[i],
+          high: quote.high[i],
+          low: quote.low[i],
+          close: quote.close[i],
+          volume: quote.volume[i],
+        })).filter((d: any) => d.close !== null && d.close !== undefined);
+      } catch {
+        continue;
+      }
     }
+    return [];
   }
 
   static async fetchDividends(ticker: string): Promise<any[]> {
     const cleanTicker = canonicalizeTicker(ticker);
-    const symbol = cleanTicker.endsWith('11') || cleanTicker.endsWith('12') || RE_BDR.test(cleanTicker) || cleanTicker.length >= 5 
-      ? `${cleanTicker}.SA` : cleanTicker;
+    const symbols = [`${cleanTicker}.SA`, cleanTicker];
       
-    try {
-      const json = await Promise.any(
-        YAHOO_HOSTS.map(host =>
-          fetchJson(
-            `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5y&interval=1mo&events=div&includePrePost=false`,
-            this._options.fetchTimeoutMs,
+    for (const symbol of symbols) {
+      try {
+        const json = await Promise.any(
+          YAHOO_HOSTS.map(host =>
+            fetchJson(
+              `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5y&interval=1mo&events=div&includePrePost=false`,
+              this._options.fetchTimeoutMs,
+            )
           )
-        )
-      );
-      
-      const events = json?.chart?.result?.[0]?.events?.dividends;
-      if (!events) return [];
-      
-      return Object.values(events).map((d: any) => ({
-        date: new Date(d.date * 1000).toISOString(),
-        amount: d.amount,
-      })).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    } catch {
-      return [];
+        );
+        
+        const events = json?.chart?.result?.[0]?.events?.dividends;
+        if (!events) continue;
+        
+        return Object.values(events).map((d: any) => ({
+          date: new Date(d.date * 1000).toISOString(),
+          amount: d.amount,
+        })).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      } catch {
+        continue;
+      }
     }
+    return [];
   }
 
   static async searchTicker(query: string): Promise<any[]> {
@@ -1239,7 +1250,7 @@ export class NexusEngineUltra {
 
   static getDetailedReport() {
     return {
-      engine:  'Nexus Engine Ultra v12.0',
+      engine:  'Nexus Engine Ultra v13.0',
       status:  'Operational',
       capabilities: [
         'Zero-AST Regex Lexer com Sliding Window Corrigido',
