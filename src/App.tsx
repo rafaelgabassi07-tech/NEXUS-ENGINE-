@@ -25,7 +25,8 @@ function Header() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleNavClick = (e: MouseEvent<HTMLAnchorElement>, href: string) => {
+  const handleNavClick = (e: MouseEvent<HTMLAnchorElement>, href: string, isExternal?: boolean) => {
+    if (isExternal) return;
     e.preventDefault();
     setIsMobileMenuOpen(false);
     
@@ -60,7 +61,7 @@ function Header() {
   };
 
   const navLinks = [
-    { href: '#benchmark', label: 'Benchmarks' },
+    { href: 'https://benchmarck-script.vercel.app', label: 'Benchmarks', isExternal: true },
     { href: '#use-cases', label: 'Casos de Uso' },
     { href: '#features', label: 'Arquitetura' },
     { href: '#source', label: 'Código' },
@@ -82,7 +83,14 @@ function Header() {
         
         <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-400">
           {navLinks.map(link => (
-            <a key={link.href} href={link.href} onClick={(e) => handleNavClick(e, link.href)} className="hover:text-white transition-colors">
+            <a 
+              key={link.href} 
+              href={link.href} 
+              onClick={(e) => handleNavClick(e, link.href, link.isExternal)} 
+              target={link.isExternal ? "_blank" : undefined}
+              rel={link.isExternal ? "noopener noreferrer" : undefined}
+              className="hover:text-white transition-colors"
+            >
               {link.label}
             </a>
           ))}
@@ -110,7 +118,14 @@ function Header() {
           >
             <div className="px-6 py-8 flex flex-col gap-4">
               {navLinks.map(link => (
-                <a key={link.href} href={link.href} onClick={(e) => handleNavClick(e, link.href)} className="text-lg font-bold text-slate-300 hover:text-white">
+                <a 
+                  key={link.href} 
+                  href={link.href} 
+                  onClick={(e) => handleNavClick(e, link.href, link.isExternal)} 
+                  target={link.isExternal ? "_blank" : undefined}
+                  rel={link.isExternal ? "noopener noreferrer" : undefined}
+                  className="text-lg font-bold text-slate-300 hover:text-white"
+                >
                   {link.label}
                 </a>
               ))}

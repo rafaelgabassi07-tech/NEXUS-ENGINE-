@@ -8,7 +8,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import nexusCode from '../lib/nexus-core.ts?raw';
 import { ArchitectureTab } from '../components/ArchitectureTab';
 import { InfoTab } from '../components/InfoTab';
-import { BenchmarkTab } from '../components/BenchmarkTab';
 import { UseCasesSection } from '../components/UseCasesSection';
 import { TestTab } from '../components/TestTab';
 
@@ -172,30 +171,6 @@ export default function HomePage() {
         {/* Floating Elements for visual depth */}
         <div className="absolute top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-600/10 blur-[120px] rounded-full animate-float pointer-events-none"></div>
         <div className="absolute top-1/3 right-0 translate-x-1/2 w-64 h-64 bg-indigo-600/10 blur-[100px] rounded-full animate-float pointer-events-none" style={{ animationDelay: '-3s' }}></div>
-      </section>
-
-      {/* Benchmark Section */}
-      <section id="benchmark" className="w-full max-w-[1920px] mx-auto px-2 sm:px-4 py-16 border-t border-white/5 scroll-mt-24">
-        <div className="mb-12 text-center">
-          <motion.h2 
-            initial={{ opacity: 0, y: 15 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-3xl md:text-5xl font-bold font-display text-white mb-4 tracking-tighter"
-          >
-            Performance
-          </motion.h2>
-          <motion.p 
-            initial={{ opacity: 0, y: 15 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.1 }}
-            className="text-slate-400 max-w-xl mx-auto text-sm"
-          >
-            Métricas reais comparando o Nexus Core com a arquitetura legada.
-          </motion.p>
-        </div>
-        <BenchmarkTab />
       </section>
 
       {/* Statistics Section */}

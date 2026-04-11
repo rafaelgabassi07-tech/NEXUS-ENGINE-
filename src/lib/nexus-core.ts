@@ -62,7 +62,7 @@ const RE_ESPACO  = /\s+/;
 
 export const VALORES_INVALIDOS = new Set([
   '-', '—', '–', 'N/A', 'n/a', 'nd', '', 'null', 'undefined',
-  '--', '---', '--%', '0%',
+  '--', '---', '--%', '0%', '0,00', '0.00', 'n.d.', 'N.D.', 'NaN', 'Inf', '#', '?'
 ]);
 
 /**
@@ -155,25 +155,36 @@ function validarTicker(clean: string): string | null {
   return null;
 }
 
+const _uaLen = USER_AGENTS.length;
 function getRandomAgent(): string {
-  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+  return USER_AGENTS[Math.floor(Math.random() * _uaLen)];
 }
 
-function periodoParaData(periodo: string): Date {
-  return new Date(Date.now() - (DIAS_POR_PERIODO[periodo] ?? 365) * 86_400_000);
+function backoffMs(attempt: number, base = 500, cap = 20_000): number {
+  const ceiling = Math.min(cap, base * 2 ** attempt);
+  return Math.random() * ceiling;
 }
 
-function backoffMs(attempt: number, base = 500, cap = 16_000): number {
-  return Math.random() * Math.min(cap, base * 2 ** attempt);
-}
 // ════════════════════════════════════════════════════════════════════════════
 // 5. LRU CACHE — corrigido
 // ════════════════════════════════════════════════════════════════════════════
 
 class LRUCache<V> {
   private mapa = new Map<string, { data: V; expiresAt: number; staleAt: number }>();
+  private _opCount = 0;
+  private readonly _cleanEvery = 50;
+
   constructor(private maxSize: number) {
     if (maxSize < 1) throw new RangeError('LRUCache: maxSize deve ser >= 1');
+  }
+
+  private _maybeClean(): void {
+    if (++this._opCount < this._cleanEvery) return;
+    this._opCount = 0;
+    const now = Date.now();
+    for (const [k, v] of this.mapa) {
+      if (now > v.expiresAt) this.mapa.delete(k);
+    }
   }
 
   get(key: string): { data: V; isStale: boolean } | null {
@@ -181,30 +192,18 @@ class LRUCache<V> {
     if (!entry) return null;
 
     const now = Date.now();
-
-    /**
-     * FIX #4 — verifica expiração ANTES de promover no LRU.
-     * A versão Gemini fazia: delete → set (promoção) → verifica expirado → delete.
-     * Isso gerava 3 operações de Map para entradas expiradas; além de reclassificar
-     * erroneamente um entry expirado como "recém-usado".
-     */
     if (now > entry.expiresAt) {
       this.mapa.delete(key);
       return null;
     }
 
-    // Promoção LRU somente para entradas válidas
     this.mapa.delete(key);
     this.mapa.set(key, entry);
     return { data: entry.data, isStale: now > entry.staleAt };
   }
 
   set(key: string, data: V, staleMs: number, ttlMs: number): void {
-    /**
-     * FIX #5 — remove a chave existente antes de verificar o tamanho.
-     * A versão Gemini verificava size >= maxSize sem considerar que a chave
-     * poderia já existir — evicta um entry LRU desnecessariamente ao atualizar.
-     */
+    this._maybeClean();
     if (this.mapa.has(key)) this.mapa.delete(key);
     else if (this.mapa.size >= this.maxSize) this.mapa.delete(this.mapa.keys().next().value!);
 
@@ -213,7 +212,7 @@ class LRUCache<V> {
   }
 
   delete(key: string): boolean { return this.mapa.delete(key); }
-  clear(): void                { this.mapa.clear(); }
+  clear(): void                { this.mapa.clear(); this._opCount = 0; }
   get tamanho(): number        { return this.mapa.size; }
   get tamanhoMax(): number     { return this.maxSize; }
 }
@@ -241,8 +240,10 @@ class DomainRateLimiter {
         this.tokens -= 1;
         return;
       }
-      // Wait a bit before trying again
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Calculate exact wait time needed for 1 token
+      const tokensNeeded = 1 - this.tokens;
+      const waitMs = (tokensNeeded / this.rps) * 1000;
+      await new Promise(resolve => setTimeout(resolve, Math.max(1, waitMs)));
     }
   }
 
@@ -335,26 +336,35 @@ function extractHostname(url: string): string {
   return h;
 }
 
-function getStealthHeaders(url: string): Record<string, string> {
-  const hostname = extractHostname(url);
-  const lang = Math.random() > 0.5
-    ? 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
-    : 'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3';
+const ACCEPT_LANGS = [
+  'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+  'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3',
+  'pt-BR,pt;q=0.9,en;q=0.8',
+  'pt-BR,pt;q=0.9',
+];
+
+function getStealthHeaders(url: string, precomputedHostname?: string): Record<string, string> {
+  const hostname = precomputedHostname || extractHostname(url);
+  const lang = ACCEPT_LANGS[Math.floor(Math.random() * ACCEPT_LANGS.length)];
+  const isFirefox = lang.includes('rv:'); // Simple heuristic, though lang doesn't have rv:. Actually we can just use generic Chrome headers.
 
   return {
     'User-Agent'               : getRandomAgent(),
-    'Accept'                   : 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept'                   : 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
     'Accept-Language'          : lang,
-    'Accept-Encoding'          : 'gzip, deflate, br',
-    'Cache-Control'            : 'no-cache',
-    'Pragma'                   : 'no-cache',
+    'Accept-Encoding'          : 'gzip, deflate, br, zstd',
+    'Cache-Control'            : 'max-age=0',
     'Upgrade-Insecure-Requests': '1',
     'DNT'                      : '1',
     'Referer'                  : hostname.includes('statusinvest') ? 'https://www.google.com/' : `https://${hostname}/`,
+    'Sec-Ch-Ua'                : '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+    'Sec-Ch-Ua-Mobile'         : '?0',
+    'Sec-Ch-Ua-Platform'       : '"Windows"',
     'Sec-Fetch-Dest'           : 'document',
     'Sec-Fetch-Mode'           : 'navigate',
     'Sec-Fetch-Site'           : 'none',
     'Sec-Fetch-User'           : '?1',
+    'Connection'               : 'keep-alive',
   };
 }
 
@@ -396,13 +406,23 @@ function getGlobalRegex(source: string): RegExp {
  * Agora usamos `indexOf` case-insensitive via regex de âncora com flag `i`, ou
  * comparamos os primeiros N chars (âncora) em lowercase UMA vez por regra.
  */
+const _anchorLowerCache = new Map<string, string>();
+
+const ANCHOR_STRATEGIES = [
+  (htmlLower: string, anchorLower: string) => htmlLower.indexOf(`>${anchorLower}<`),
+  (htmlLower: string, anchorLower: string) => htmlLower.indexOf(`"${anchorLower}"`),
+  (htmlLower: string, anchorLower: string) => htmlLower.indexOf(`>${anchorLower} `),
+  (htmlLower: string, anchorLower: string) => htmlLower.indexOf(anchorLower),
+];
+
 export function universalLexer<T = any>(
   html: string,
   template: ExtractorTemplate<T>,
   existingResults: Partial<T> = {},
+  precomputedHtmlLower?: string,
 ): Partial<T> {
   const results: any = { ...existingResults };
-  const htmlLower = html.toLowerCase();
+  const htmlLower = precomputedHtmlLower || html.toLowerCase();
 
   for (const rule of template.rules) {
     if (results[rule.name] !== undefined && !rule.multiple) continue;
@@ -410,15 +430,20 @@ export function universalLexer<T = any>(
     for (const anchor of rule.anchors) {
       /**
        * FIX #10 — busca case-insensitive eficiente sem `.toLowerCase()` do HTML inteiro.
-       * Usa indexOf em lowercase somente sobre o buffer (já feito 1x por chamada abaixo).
+       * PERF #4 — cache de anchor.toLowerCase() para evitar alocações no hot path.
        */
-      const anchorLower = anchor.toLowerCase();
+      let anchorLower = _anchorLowerCache.get(anchor);
+      if (!anchorLower) {
+        anchorLower = anchor.toLowerCase();
+        _anchorLowerCache.set(anchor, anchorLower);
+      }
 
       // Estratégias de busca em ordem de precisão decrescente
-      let idx = htmlLower.indexOf(`>${anchorLower}<`);
-      if (idx === -1) idx = htmlLower.indexOf(`"${anchorLower}"`);
-      if (idx === -1) idx = htmlLower.indexOf(`>${anchorLower} `);
-      if (idx === -1) idx = htmlLower.indexOf(anchorLower);   // Última opção: menos precisa
+      let idx = -1;
+      for (const strategy of ANCHOR_STRATEGIES) {
+        idx = strategy(htmlLower, anchorLower);
+        if (idx !== -1) break;
+      }
       if (idx === -1) continue;
 
       const chunkSize = rule.multiple ? 3000 : 400;
@@ -473,6 +498,9 @@ export const B3Schema = z.object({
   roic:          z.string().optional(),
   margemLiquida: z.string().optional(),
   margemBruta:   z.string().optional(),
+  margemOperacional: z.string().optional(),
+  dividaBruta:   z.union([z.number(), z.string()]).optional(),
+  marketCap:     z.union([z.number(), z.string()]).optional(),
   evEbitda:      z.union([z.number(), z.string()]).optional(),
   variacaoDay:   z.string().optional(),
 });
@@ -515,10 +543,10 @@ export const acaoTemplate: ExtractorTemplate<B3Data> = {
   name: 'B3_ACAO',
   schema: B3Schema,
   rules: [
-    { name: 'precoAtual',    anchors: ['Preço Atual', 'Cotação', 'cotacao'],            extractRegex: />\s*([R$]*\s*[\d,.]+)\s*</,  formatter: COMMON_FORMATTERS.num },
-    { name: 'dividendYield', anchors: ['Dividend Yield', 'DY', 'Yield'],               extractRegex: />\s*([\d,.]+\s*%?)\s*</,      formatter: COMMON_FORMATTERS.pct },
-    { name: 'pl',            anchors: ['P/L', 'P/Lucro', 'Preço/Lucro'],               extractRegex: />\s*([\d,.-]+)\s*</,          formatter: COMMON_FORMATTERS.num },
-    { name: 'pvp',           anchors: ['P/VP', 'P/Valor Patrimonial'],                  extractRegex: />\s*([\d,.-]+)\s*</,          formatter: COMMON_FORMATTERS.num },
+    { name: 'precoAtual',    anchors: ['Preço Atual', 'Cotação', 'cotacao', 'Valor atual'],            extractRegex: />\s*([R$]*\s*[\d,.]+)\s*</,  formatter: COMMON_FORMATTERS.num },
+    { name: 'dividendYield', anchors: ['Dividend Yield', 'DY', 'Yield', 'Div. Yield'],               extractRegex: />\s*([\d,.]+\s*%?)\s*</,      formatter: COMMON_FORMATTERS.pct },
+    { name: 'pl',            anchors: ['P/L', 'P/Lucro', 'Preço/Lucro', 'P / L'],               extractRegex: />\s*([\d,.-]+)\s*</,          formatter: COMMON_FORMATTERS.num },
+    { name: 'pvp',           anchors: ['P/VP', 'P/Valor Patrimonial', 'P / VP'],                  extractRegex: />\s*([\d,.-]+)\s*</,          formatter: COMMON_FORMATTERS.num },
     { name: 'vpa',           anchors: ['VPA', 'Valor Patrimonial por Ação'],            extractRegex: />\s*([\d,.-]+)\s*</,          formatter: COMMON_FORMATTERS.num },
     { name: 'lpa',           anchors: ['LPA', 'Lucro por Ação'],                        extractRegex: />\s*([\d,.-]+)\s*</,          formatter: COMMON_FORMATTERS.num },
     { name: 'roe',           anchors: ['ROE', 'Retorno sobre Patrimônio'],              extractRegex: />\s*([\d,.+-]+\s*%?)\s*</,    formatter: COMMON_FORMATTERS.pct },
@@ -526,7 +554,7 @@ export const acaoTemplate: ExtractorTemplate<B3Data> = {
     { name: 'margemLiquida', anchors: ['Margem Líquida', 'Margem Liquida'],             extractRegex: />\s*([\d,.+-]+\s*%?)\s*</,    formatter: COMMON_FORMATTERS.pct },
     { name: 'margemBruta',   anchors: ['Margem Bruta'],                                 extractRegex: />\s*([\d,.+-]+\s*%?)\s*</,    formatter: COMMON_FORMATTERS.pct },
     { name: 'evEbitda',      anchors: ['EV/EBITDA'],                                    extractRegex: />\s*([\d,.-]+)\s*</,          formatter: COMMON_FORMATTERS.num },
-    { name: 'variacaoDay',   anchors: ['Variação', 'variacao', 'Var. Dia', 'var-day'], extractRegex: />\s*([+-]?[\d,.]+\s*%?)\s*</, formatter: COMMON_FORMATTERS.pct },
+    { name: 'variacaoDay',   anchors: ['Variação', 'variacao', 'Var. Dia', 'var-day', 'Var%'], extractRegex: />\s*([+-]?[\d,.]+\s*%?)\s*</, formatter: COMMON_FORMATTERS.pct },
   ],
 };
 
@@ -534,15 +562,15 @@ export const fiiTemplate: ExtractorTemplate<FIIData> = {
   name: 'B3_FII',
   schema: FIISchema,
   rules: [
-    { name: 'precoAtual',        anchors: ['Preço Atual', 'Cotação'],              extractRegex: />\s*([\d,.]+)\s*</,    formatter: COMMON_FORMATTERS.num },
-    { name: 'dividendYield',     anchors: ['Dividend Yield', 'DY', 'Yield'],       extractRegex: />\s*([\d,.]+\s*%?)\s*</, formatter: COMMON_FORMATTERS.pct },
-    { name: 'pvp',               anchors: ['P/VP'],                                 extractRegex: />\s*([\d,.]+)\s*</,    formatter: COMMON_FORMATTERS.num },
+    { name: 'precoAtual',        anchors: ['Preço Atual', 'Cotação', 'Valor atual'],              extractRegex: />\s*([\d,.]+)\s*</,    formatter: COMMON_FORMATTERS.num },
+    { name: 'dividendYield',     anchors: ['Dividend Yield', 'DY', 'Yield', 'Div. Yield'],       extractRegex: />\s*([\d,.]+\s*%?)\s*</, formatter: COMMON_FORMATTERS.pct },
+    { name: 'pvp',               anchors: ['P/VP', 'P / VP'],                                 extractRegex: />\s*([\d,.]+)\s*</,    formatter: COMMON_FORMATTERS.num },
     { name: 'valorPatrimonial',  anchors: ['Valor Patrimonial', 'VP/Cota'],         extractRegex: />\s*([\d,.]+)\s*</,    formatter: COMMON_FORMATTERS.num },
-    { name: 'liquidezDiaria',    anchors: ['Liquidez', 'Liquidez Diária'],          extractRegex: />\s*([\d,.]+[KMB]?)\s*</, formatter: COMMON_FORMATTERS.num },
-    { name: 'ultimoRendimento',  anchors: ['Último Rendimento', 'Rendimento'],      extractRegex: />\s*([\d,.]+)\s*</,    formatter: COMMON_FORMATTERS.num },
+    { name: 'liquidezDiaria',    anchors: ['Liquidez', 'Liquidez Diária', 'Liq. Diária'],          extractRegex: />\s*([\d,.]+[KMB]?)\s*</, formatter: COMMON_FORMATTERS.num },
+    { name: 'ultimoRendimento',  anchors: ['Último Rendimento', 'Rendimento', 'Últ. Rendimento'],      extractRegex: />\s*([\d,.]+)\s*</,    formatter: COMMON_FORMATTERS.num },
     { name: 'vacanciaFisica',    anchors: ['Vacância Física', 'Vacância'],          extractRegex: />\s*([\d,.]+\s*%?)\s*</, formatter: COMMON_FORMATTERS.pct },
     { name: 'patrimonioLiquido', anchors: ['Patrimônio Líquido', 'Patrimônio'],     extractRegex: />\s*([\d,.]+[KMB]?)\s*</, formatter: COMMON_FORMATTERS.num },
-    { name: 'variacaoDay',       anchors: ['Variação', 'variacao'],                 extractRegex: />\s*([+-]?[\d,.]+\s*%?)\s*</, formatter: COMMON_FORMATTERS.pct },
+    { name: 'variacaoDay',       anchors: ['Variação', 'variacao', 'Var%'],                 extractRegex: />\s*([+-]?[\d,.]+\s*%?)\s*</, formatter: COMMON_FORMATTERS.pct },
   ],
 };
 
@@ -601,19 +629,40 @@ interface YahooFundamentalsData {
   debtToEquity?: number;
 }
 
+const _jsonInFlight = new Map<string, Promise<any>>();
+
 async function fetchJson(url: string, timeoutMs: number): Promise<any> {
-  const ctrl  = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      signal:  ctrl.signal,
-      headers: { 'Accept': 'application/json', 'User-Agent': getRandomAgent() },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } finally {
-    clearTimeout(timer);
-  }
+  const existing = _jsonInFlight.get(url);
+  if (existing) return existing;
+
+  const p = (async () => {
+    const ctrl  = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, {
+        signal:  ctrl.signal,
+        headers: { 
+          'Accept': 'application/json, text/plain, */*', 
+          'User-Agent': getRandomAgent(),
+          'Origin': 'https://finance.yahoo.com',
+          'Referer': 'https://finance.yahoo.com/',
+        },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${text.slice(0, 20)}`);
+      }
+    } finally {
+      clearTimeout(timer);
+      _jsonInFlight.delete(url);
+    }
+  })();
+
+  _jsonInFlight.set(url, p);
+  return p;
 }
 
 /**
@@ -622,9 +671,9 @@ async function fetchJson(url: string, timeoutMs: number): Promise<any> {
  */
 async function yahooQuote(ticker: string, timeoutMs: number): Promise<YahooQuoteData | null> {
   const symbols = [`${ticker}.SA`, ticker.toUpperCase()];
-  for (const symbol of symbols) {
-    try {
-      const meta = await Promise.any(
+  try {
+    const meta = await Promise.any(
+      symbols.flatMap(symbol =>
         YAHOO_HOSTS.map(async host => {
           const json = await fetchJson(
             `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d&includePrePost=false`,
@@ -634,49 +683,51 @@ async function yahooQuote(ticker: string, timeoutMs: number): Promise<YahooQuote
           if (!m?.regularMarketPrice) throw new Error('Sem meta');
           return m;
         })
-      );
-      const prev = meta.chartPreviousClose ?? meta.regularMarketPreviousClose;
-      return {
-        regularMarketPrice:          meta.regularMarketPrice,
-        regularMarketChangePercent:  prev ? ((meta.regularMarketPrice - prev) / prev) * 100 : undefined,
-        trailingPE:                  meta.trailingPE,
-        priceToBook:                 meta.priceToBook,
-        bookValue:                   meta.bookValue,
-        epsTrailingTwelveMonths:     meta.epsTrailingTwelveMonths,
-        trailingAnnualDividendYield: meta.trailingAnnualDividendYield,
-        marketCap:                   meta.marketCap,
-      };
-    } catch { continue; }
+      )
+    );
+    const prev = meta.chartPreviousClose ?? meta.regularMarketPreviousClose;
+    return {
+      regularMarketPrice:          meta.regularMarketPrice,
+      regularMarketChangePercent:  prev ? ((meta.regularMarketPrice - prev) / prev) * 100 : undefined,
+      trailingPE:                  meta.trailingPE,
+      priceToBook:                 meta.priceToBook,
+      bookValue:                   meta.bookValue,
+      epsTrailingTwelveMonths:     meta.epsTrailingTwelveMonths,
+      trailingAnnualDividendYield: meta.trailingAnnualDividendYield,
+      marketCap:                   meta.marketCap,
+    };
+  } catch {
+    return null;
   }
-  return null;
 }
 
 async function yahooFundamentals(ticker: string, timeoutMs: number): Promise<YahooFundamentalsData> {
   const symbols  = [`${ticker}.SA`, ticker.toUpperCase()];
   const modules  = 'financialData,defaultKeyStatistics';
-  for (const symbol of symbols) {
-    try {
-      const json = await Promise.any(
-        YAHOO_HOSTS.map(host =>
-          fetchJson(
+  try {
+    const fd = await Promise.any(
+      symbols.flatMap(symbol =>
+        YAHOO_HOSTS.map(async host => {
+          const json = await fetchJson(
             `https://${host}.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${modules}`,
             timeoutMs,
-          )
-        )
-      );
-      const fd = json?.quoteSummary?.result?.[0]?.financialData;
-      if (!fd) continue;
-      return {
-        profitMargins:    fd.profitMargins?.raw,
-        returnOnEquity:   fd.returnOnEquity?.raw,
-        revenuePerShare:  fd.revenuePerShare?.raw,
-        returnOnAssets:   fd.returnOnAssets?.raw,
-        grossMargins:     fd.grossMargins?.raw,
-        operatingMargins: fd.operatingMargins?.raw,
-        debtToEquity:     fd.debtToEquity?.raw,
-      };
-    } catch { continue; }
-  }
+          );
+          const data = json?.quoteSummary?.result?.[0]?.financialData;
+          if (!data) throw new Error('Sem financialData');
+          return data;
+        })
+      )
+    );
+    return {
+      profitMargins:    fd.profitMargins?.raw,
+      returnOnEquity:   fd.returnOnEquity?.raw,
+      revenuePerShare:  fd.revenuePerShare?.raw,
+      returnOnAssets:   fd.returnOnAssets?.raw,
+      grossMargins:     fd.grossMargins?.raw,
+      operatingMargins: fd.operatingMargins?.raw,
+      debtToEquity:     fd.debtToEquity?.raw,
+    };
+  } catch { }
   return {};
 }
 // ════════════════════════════════════════════════════════════════════════════
@@ -688,7 +739,7 @@ export class NexusEngineUltra {
   private static _urlInFlight     = new Map<string, Promise<any>>();
   private static _tickerInFlight  = new Map<string, Promise<any>>();
 
-  private static _cache           = new LRUCache<any>(300);
+  private static _cache           = new LRUCache<any>(500);
   /** FIX #15 — CB por domínio, não instanciado lazily mas com factory controlada */
   private static _circuitBreakers = new Map<string, CircuitBreaker>();
   private static _startTime       = Date.now();
@@ -702,7 +753,7 @@ export class NexusEngineUltra {
     cacheStaleMs:     5  * 60 * 1_000,
     maxRetries:       3,
     retryBaseDelay:   500,
-    fetchTimeoutMs:   10_000,
+    fetchTimeoutMs:   15_000,
     concurrencyLimit: 5,
     domainRps:        2,
     domainBurst:      5,
@@ -765,10 +816,17 @@ export class NexusEngineUltra {
       try {
         const res = await fetch(url, {
           signal:  ctrl.signal,
-          headers: requireStealth ? getStealthHeaders(url) : { 'User-Agent': getRandomAgent() },
+          headers: requireStealth ? getStealthHeaders(url, hostname) : { 'User-Agent': getRandomAgent() },
         });
         clearTimeout(timer);
 
+        if (res.status === 429 || res.status === 503) {
+          const retryAfter = res.headers.get('Retry-After');
+          const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : undefined;
+          const err = new Error(`RateLimit HTTP ${res.status}`);
+          (err as any).retryAfterMs = delay;
+          throw err;
+        }
         if (res.status === 404 || res.status === 410 || res.status === 451) {
           throw new Error(`Critical HTTP ${res.status}`);
         }
@@ -780,7 +838,12 @@ export class NexusEngineUltra {
         lastErr = err as Error;
         if (lastErr.message.includes('Critical')) throw lastErr;
         if (attempt < this._options.maxRetries - 1) {
-          await new Promise(r => setTimeout(r, backoffMs(attempt, this._options.retryBaseDelay)));
+          const isRateLimit = lastErr.message.includes('RateLimit');
+          let delay = backoffMs(attempt, this._options.retryBaseDelay) * (isRateLimit ? 2 : 1);
+          if (isRateLimit && (lastErr as any).retryAfterMs) {
+            delay = (lastErr as any).retryAfterMs;
+          }
+          await new Promise(r => setTimeout(r, delay));
         }
       }
     }
@@ -838,6 +901,9 @@ export class NexusEngineUltra {
   ): Promise<{ data: Partial<T>; bytes: number; earlyAbort: boolean }> {
     let lastErr: Error = new Error('Nenhuma fonte disponível');
     let openCBs = 0;
+    let bestData: Partial<T> = {};
+    let totalBytes = 0;
+    let anyEarlyAbort = false;
 
     for (const source of sources) {
       const hostname = extractHostname(source.url);
@@ -863,7 +929,25 @@ export class NexusEngineUltra {
           fetchPromise.finally(() => this._urlInFlight.delete(source.url));
         }
 
-        return await fetchPromise;
+        const result = await fetchPromise;
+        
+        // SUCCESS #6: Acumula o melhor resultado parcial
+        for (const [k, v] of Object.entries(result.data)) {
+          if (v !== undefined) {
+            (bestData as any)[k] = v;
+          }
+        }
+        totalBytes += result.bytes;
+        anyEarlyAbort = anyEarlyAbort || result.earlyAbort;
+
+        // Se conseguiu tudo, retorna imediatamente
+        const hasAll = source.template.rules.every(r => bestData[r.name as keyof T] !== undefined);
+        if (hasAll) {
+          return { data: bestData, bytes: totalBytes, earlyAbort: anyEarlyAbort };
+        }
+        
+        // Se não conseguiu tudo, tenta a próxima fonte para preencher as lacunas
+        continue;
       } catch (err) {
         lastErr = err as Error;
         // Erros críticos (404, etc.) não fazem fallback
@@ -872,6 +956,11 @@ export class NexusEngineUltra {
       }
     }
     
+    // Se acumulou algum dado parcial, retorna ele mesmo que todas as fontes tenham falhado parcialmente
+    if (Object.keys(bestData).length > 0) {
+      return { data: bestData, bytes: totalBytes, earlyAbort: anyEarlyAbort };
+    }
+
     if (openCBs === sources.length && sources.length > 0) {
       throw new Error(`Todos os Circuit Breakers abertos (${openCBs}/${sources.length} fontes)`);
     }
@@ -894,15 +983,20 @@ export class NexusEngineUltra {
       let rawData: Partial<T> = {};
       let bytesRead  = 0;
       let earlyAbort = false;
+      let stagnantChunks = 0;
+      let lastFieldCount = 0;
 
       /**
        * FIX #9 aplicado — sliding window com overlap calculado.
        * Overlap = comprimento máximo de qualquer âncora + 256 bytes de margem.
        * Isso garante que nenhum âncora seja partido na fronteira do slice.
+       * PERF #10 — MAX_WINDOW aumentado para 30_000 chars.
        */
-      const MAX_WINDOW   = 20_000;
+      const MAX_WINDOW   = 30_000;
       const MAX_ANCHOR   = source.template.rules.reduce((max, r) => r.anchors.reduce((m, a) => Math.max(m, a.length), max), 0);
       const OVERLAP_SIZE = Math.max(MAX_ANCHOR + 256, 512);
+
+      let htmlLowerBuffer = '';
 
       try {
         while (true) {
@@ -910,14 +1004,34 @@ export class NexusEngineUltra {
           if (done) break;
 
           bytesRead  += value.length;
-          htmlBuffer += decoder.decode(value, { stream: true });
+          const decoded = decoder.decode(value, { stream: true });
+          htmlBuffer += decoded;
+          htmlLowerBuffer += decoded.toLowerCase();
 
           if (htmlBuffer.length > MAX_WINDOW) {
             // Mantemos o overlap do final do buffer anterior para não cortar âncoras
             htmlBuffer = htmlBuffer.slice(-(MAX_WINDOW - OVERLAP_SIZE));
+            htmlLowerBuffer = htmlLowerBuffer.slice(-(MAX_WINDOW - OVERLAP_SIZE));
           }
 
-          rawData = universalLexer<T>(htmlBuffer, source.template, rawData);
+          rawData = universalLexer<T>(htmlBuffer, source.template, rawData, htmlLowerBuffer);
+
+          const currentFieldCount = Object.keys(rawData).length;
+          if (bytesRead > 100_000) {
+            if (currentFieldCount === lastFieldCount) {
+              stagnantChunks++;
+              if (stagnantChunks >= 10) {
+                reader.cancel().catch(() => {});
+                earlyAbort = true;
+                break;
+              }
+            } else {
+              stagnantChunks = 0;
+              lastFieldCount = currentFieldCount;
+            }
+          } else {
+            lastFieldCount = currentFieldCount;
+          }
 
           const hasAll = source.template.rules.every(r => rawData[r.name as keyof T] !== undefined);
           if (hasAll) {
@@ -928,12 +1042,11 @@ export class NexusEngineUltra {
         }
 
         // Flush final
-        if (!earlyAbort) {
-          const tail = decoder.decode();
-          if (tail) {
-            htmlBuffer += tail;
-            rawData = universalLexer<T>(htmlBuffer, source.template, rawData);
-          }
+        const tail = decoder.decode();
+        if (tail) {
+          htmlBuffer += tail;
+          htmlLowerBuffer += tail.toLowerCase();
+          rawData = universalLexer<T>(htmlBuffer, source.template, rawData, htmlLowerBuffer);
         }
       } finally {
         try { reader.releaseLock(); } catch { /* ignore */ }
@@ -957,7 +1070,10 @@ export class NexusEngineUltra {
       return { data: rawData, bytes: bytesRead, earlyAbort };
 
     } catch (err) {
-      cb.recordFailure();
+      const isRateLimit = err instanceof Error && err.message.includes('RateLimit');
+      if (!isRateLimit) {
+        cb.recordFailure();
+      }
       this._totalFailures++;
       throw err;
     }
@@ -1011,7 +1127,11 @@ export class NexusEngineUltra {
     // Preenche lacunas com dados do Yahoo
     const fill = (k: string, v: unknown) => {
       if (combined[k] !== undefined || v == null) return;
-      const s = typeof v === 'number' ? v.toFixed(2) : String(v).trim();
+      if (typeof v === 'number') {
+        combined[k] = v;
+        return;
+      }
+      const s = String(v).trim();
       if (!VALORES_INVALIDOS.has(s)) combined[k] = s;
     };
 
@@ -1025,11 +1145,15 @@ export class NexusEngineUltra {
       fill('lpa',           quote.epsTrailingTwelveMonths);
       fill('dividendYield', quote.trailingAnnualDividendYield != null
         ? (quote.trailingAnnualDividendYield * 100).toFixed(2) + '%' : undefined);
+      fill('marketCap',     quote.marketCap);
     }
     if (fund) {
       fill('margemLiquida',  fund.profitMargins    != null ? (fund.profitMargins    * 100).toFixed(2) + '%' : undefined);
       fill('margemBruta',    fund.grossMargins     != null ? (fund.grossMargins     * 100).toFixed(2) + '%' : undefined);
       fill('roe',            fund.returnOnEquity   != null ? (fund.returnOnEquity   * 100).toFixed(2) + '%' : undefined);
+      fill('roic',           fund.returnOnAssets   != null ? (fund.returnOnAssets   * 100).toFixed(2) + '%' : undefined); // Yahoo uses returnOnAssets for ROIC proxy
+      fill('margemOperacional', fund.operatingMargins != null ? (fund.operatingMargins * 100).toFixed(2) + '%' : undefined);
+      fill('dividaBruta',    fund.debtToEquity);
     }
 
     const totalTimeMs = performance.now() - startTime;
@@ -1072,35 +1196,35 @@ export class NexusEngineUltra {
     const cleanTicker = canonicalizeTicker(ticker);
     const symbols = [`${cleanTicker}.SA`, cleanTicker];
       
-    for (const symbol of symbols) {
-      try {
-        const json = await Promise.any(
-          YAHOO_HOSTS.map(host =>
-            fetchJson(
+    try {
+      const result = await Promise.any(
+        symbols.flatMap(symbol =>
+          YAHOO_HOSTS.map(async host => {
+            const json = await fetchJson(
               `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=false`,
               this._options.fetchTimeoutMs,
-            )
-          )
-        );
-        
-        const result = json?.chart?.result?.[0];
-        if (!result || !result.timestamp || !result.indicators?.quote?.[0]) continue;
-        
-        const timestamps = result.timestamp;
-        const quote = result.indicators.quote[0];
-        
-        return timestamps.map((ts: number, i: number) => ({
-          date: new Date(ts * 1000).toISOString(),
-          open: quote.open[i],
-          high: quote.high[i],
-          low: quote.low[i],
-          close: quote.close[i],
-          volume: quote.volume[i],
-        })).filter((d: any) => d.close !== null && d.close !== undefined);
-      } catch {
-        continue;
-      }
-    }
+            );
+            const res = json?.chart?.result?.[0];
+            if (!res || !res.timestamp || !res.indicators?.quote?.[0]) {
+              throw new Error('Sem dados de histórico');
+            }
+            return res;
+          })
+        )
+      );
+      
+      const timestamps = result.timestamp;
+      const quote = result.indicators.quote[0];
+      
+      return timestamps.map((ts: number, i: number) => ({
+        date: new Date(ts * 1000).toISOString(),
+        open: quote.open[i],
+        high: quote.high[i],
+        low: quote.low[i],
+        close: quote.close[i],
+        volume: quote.volume[i],
+      })).filter((d: any) => d.close !== null && d.close !== undefined);
+    } catch { }
     return [];
   }
 
@@ -1108,28 +1232,26 @@ export class NexusEngineUltra {
     const cleanTicker = canonicalizeTicker(ticker);
     const symbols = [`${cleanTicker}.SA`, cleanTicker];
       
-    for (const symbol of symbols) {
-      try {
-        const json = await Promise.any(
-          YAHOO_HOSTS.map(host =>
-            fetchJson(
+    try {
+      const events = await Promise.any(
+        symbols.flatMap(symbol =>
+          YAHOO_HOSTS.map(async host => {
+            const json = await fetchJson(
               `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5y&interval=1mo&events=div&includePrePost=false`,
               this._options.fetchTimeoutMs,
-            )
-          )
-        );
-        
-        const events = json?.chart?.result?.[0]?.events?.dividends;
-        if (!events) continue;
-        
-        return Object.values(events).map((d: any) => ({
-          date: new Date(d.date * 1000).toISOString(),
-          amount: d.amount,
-        })).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      } catch {
-        continue;
-      }
-    }
+            );
+            const evs = json?.chart?.result?.[0]?.events?.dividends;
+            if (!evs) throw new Error('Sem dividendos');
+            return evs;
+          })
+        )
+      );
+      
+      return Object.values(events).map((d: any) => ({
+        date: new Date(d.date * 1000).toISOString(),
+        amount: d.amount,
+      })).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    } catch { }
     return [];
   }
 
@@ -1138,48 +1260,69 @@ export class NexusEngineUltra {
       `https://query2.finance.yahoo.com/v2/finance/search?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0`,
       `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0`,
     ];
-    for (const url of endpoints) {
-      try {
-        const json = await fetchJson(url, this._options.fetchTimeoutMs);
-        return (json?.quotes ?? []).filter(
-          (q: any) => q.exchange === 'SAO' || q.exchange === 'BVMF' || q.symbol?.endsWith('.SA')
-        );
-      } catch { continue; }
+    try {
+      const json = await Promise.any(
+        endpoints.map(url => fetchJson(url, this._options.fetchTimeoutMs))
+      );
+      return (json?.quotes ?? []).filter(
+        (q: any) => q.exchange === 'SAO' || q.exchange === 'BVMF' || q.symbol?.endsWith('.SA')
+      );
+    } catch {
+      return [];
     }
-    return [];
   }
 
   static async fetchNews(ticker: string): Promise<NewsItem[]> {
     const clean = canonicalizeTicker(ticker);
-    try {
-      const res = await fetch(`https://news.google.com/rss/search?q=${clean}+acao+OR+fii+OR+b3&hl=pt-BR&gl=BR&ceid=BR:pt-419`);
-      if (!res.ok) return [];
-      const xml = await res.text();
-      
-      const items: NewsItem[] = [];
-      const itemRegex = /<item>([\s\S]*?)<\/item>/g;
-      let match;
-      
-      while ((match = itemRegex.exec(xml)) !== null && items.length < 5) {
-        const itemXml = match[1];
-        const titleMatch = /<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/.exec(itemXml);
-        const linkMatch = /<link>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/.exec(itemXml);
-        const pubDateMatch = /<pubDate>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/pubDate>/.exec(itemXml);
-        const sourceMatch = /<source[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/source>/.exec(itemXml);
+    const url = `https://news.google.com/rss/search?q=${clean}+ação+OR+fii+OR+b3+OR+investimento&hl=pt-BR&gl=BR&ceid=BR:pt-419`;
+    
+    // Deduplicação in-flight para notícias
+    const existing = this._urlInFlight.get(url);
+    if (existing) return existing;
+
+    const p = (async () => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), this._options.fetchTimeoutMs);
+      try {
+        const res = await fetch(url, { 
+          signal: ctrl.signal,
+          headers: { 'User-Agent': getRandomAgent() } 
+        });
+        clearTimeout(timer);
+        if (!res.ok) return [];
+        const xml = await res.text();
         
-        if (titleMatch && linkMatch) {
-          items.push({
-            title: titleMatch[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>'),
-            link: linkMatch[1],
-            pubDate: pubDateMatch ? new Date(pubDateMatch[1]) : undefined,
-            source: sourceMatch ? sourceMatch[1] : undefined,
-          });
+        const items: NewsItem[] = [];
+        const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+        let match;
+        
+        while ((match = itemRegex.exec(xml)) !== null && items.length < 5) {
+          const itemXml = match[1];
+          const titleMatch = /<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/.exec(itemXml);
+          const linkMatch = /<link>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/.exec(itemXml);
+          const pubDateMatch = /<pubDate>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/pubDate>/.exec(itemXml);
+          const sourceMatch = /<source[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/source>/.exec(itemXml);
+          
+          if (titleMatch && linkMatch) {
+            items.push({
+              title: titleMatch[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>'),
+              link: linkMatch[1],
+              pubDate: pubDateMatch ? new Date(pubDateMatch[1]) : undefined,
+              source: sourceMatch ? sourceMatch[1] : undefined,
+            });
+          }
         }
+        return items;
+      } catch {
+        return [];
+      } finally {
+        clearTimeout(timer);
+        this._urlInFlight.delete(url);
       }
-      return items;
-    } catch {
-      return [];
-    }
+    })();
+
+    this._urlInFlight.set(url, p);
+    return p;
   }
 
   // ── executeBatch: PRESERVA ORDEM DOS RESULTADOS ──────────────────────────
@@ -1213,7 +1356,7 @@ export class NexusEngineUltra {
   // ── Cache e Diagnóstico ──────────────────────────────────────────────────
 
   static clearCache(): void {
-    this._cache           = new LRUCache<any>(300);
+    this._cache           = new LRUCache<any>(500);
     _hostnameCache.clear();
     _regexCache.clear();
   }
@@ -1254,7 +1397,7 @@ export class NexusEngineUltra {
 
   static getDetailedReport() {
     return {
-      engine:  'Nexus Engine Ultra v13.0',
+      engine:  'Nexus Engine Ultra v15.0',
       status:  'Operational',
       capabilities: [
         'Zero-AST Regex Lexer com Sliding Window Corrigido',

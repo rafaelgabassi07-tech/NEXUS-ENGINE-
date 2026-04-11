@@ -53,9 +53,6 @@ export function InfoTab({ nexusCode }: InfoTabProps) {
 
   const endpoints = [
     { name: 'Nexus Scraper', method: 'POST', path: '/api/scrape', desc: 'Extração rápida e simplificada via Nexus Engine.' },
-    { name: 'Nexus Scraper V2', method: 'POST', path: '/api/scrape-v2', desc: 'Métricas detalhadas, notícias e indicadores.' },
-    { name: 'Stats Engine', method: 'GET', path: '/api/stats', desc: 'Métricas de performance e latência em tempo real.' },
-    { name: 'Clear Cache', method: 'POST', path: '/api/clear-cache', desc: 'Limpeza manual do cache global (Edge/Serverless).' },
     { name: 'Health Check', method: 'GET', path: '/api/health', desc: 'Status operacional e integridade do sistema.' }
   ];
 
