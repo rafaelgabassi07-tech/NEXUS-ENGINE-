@@ -146,36 +146,7 @@ export function canonicalizeTicker(raw: string): string {
 }
 
 export async function fetchNews(ticker: string): Promise<NewsItem[]> {
-  const clean = canonicalizeTicker(ticker);
-  try {
-    const res = await fetch(`https://news.google.com/rss/search?q=${clean}+acao+OR+fii+OR+b3&hl=pt-BR&gl=BR&ceid=BR:pt-419`);
-    if (!res.ok) return [];
-    const xml = await res.text();
-    
-    const items: NewsItem[] = [];
-    const itemRegex = /<item>([\s\S]*?)<\/item>/g;
-    let match;
-    
-    while ((match = itemRegex.exec(xml)) !== null && items.length < 5) {
-      const itemXml = match[1];
-      const titleMatch = /<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/.exec(itemXml);
-      const linkMatch = /<link>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/.exec(itemXml);
-      const pubDateMatch = /<pubDate>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/pubDate>/.exec(itemXml);
-      const sourceMatch = /<source[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/source>/.exec(itemXml);
-      
-      if (titleMatch && linkMatch) {
-        items.push({
-          title: titleMatch[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>'),
-          link: linkMatch[1],
-          pubDate: pubDateMatch ? new Date(pubDateMatch[1]) : undefined,
-          source: sourceMatch ? sourceMatch[1] : undefined,
-        });
-      }
-    }
-    return items;
-  } catch {
-    return [];
-  }
+  return NexusEngineUltra.fetchNews(ticker);
 }
 
 function validarTicker(clean: string): string | null {
@@ -1028,7 +999,7 @@ export class NexusEngineUltra {
       this.execute(sources),
       yahooQuote(cleanTicker, this._options.fetchTimeoutMs),
       yahooFundamentals(cleanTicker, this._options.fetchTimeoutMs),
-      includeNews ? fetchNews(cleanTicker) : Promise.resolve(undefined),
+      includeNews ? this.fetchNews(cleanTicker) : Promise.resolve(undefined),
     ]);
 
     const scrape   = scrapeResult.status === 'fulfilled' ? scrapeResult.value : { data: {}, bytes: 0, earlyAbort: false, cacheStatus: 'ERROR' };
@@ -1176,6 +1147,39 @@ export class NexusEngineUltra {
       } catch { continue; }
     }
     return [];
+  }
+
+  static async fetchNews(ticker: string): Promise<NewsItem[]> {
+    const clean = canonicalizeTicker(ticker);
+    try {
+      const res = await fetch(`https://news.google.com/rss/search?q=${clean}+acao+OR+fii+OR+b3&hl=pt-BR&gl=BR&ceid=BR:pt-419`);
+      if (!res.ok) return [];
+      const xml = await res.text();
+      
+      const items: NewsItem[] = [];
+      const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+      let match;
+      
+      while ((match = itemRegex.exec(xml)) !== null && items.length < 5) {
+        const itemXml = match[1];
+        const titleMatch = /<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/.exec(itemXml);
+        const linkMatch = /<link>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/.exec(itemXml);
+        const pubDateMatch = /<pubDate>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/pubDate>/.exec(itemXml);
+        const sourceMatch = /<source[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/source>/.exec(itemXml);
+        
+        if (titleMatch && linkMatch) {
+          items.push({
+            title: titleMatch[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>'),
+            link: linkMatch[1],
+            pubDate: pubDateMatch ? new Date(pubDateMatch[1]) : undefined,
+            source: sourceMatch ? sourceMatch[1] : undefined,
+          });
+        }
+      }
+      return items;
+    } catch {
+      return [];
+    }
   }
 
   // ── executeBatch: PRESERVA ORDEM DOS RESULTADOS ──────────────────────────
