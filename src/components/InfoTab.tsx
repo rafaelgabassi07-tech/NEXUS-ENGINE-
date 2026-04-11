@@ -79,7 +79,7 @@ const batch = await runNexusBatch(['VALE3', 'ITUB4'], 'ACAO');`;
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight font-display text-white">Documentação</h2>
-          <p className="text-slate-400 mt-1 text-sm font-light">Guia de integração Nexus Engine 12.0-Ultra.</p>
+          <p className="text-slate-400 mt-1 text-sm font-light">Guia de integração Nexus Engine 10.1-Ultra.</p>
         </div>
         <div className="flex items-center gap-2">
           <button 
@@ -100,7 +100,7 @@ const batch = await runNexusBatch(['VALE3', 'ITUB4'], 'ACAO');`;
           </button>
           <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-indigo-600/10 border border-indigo-500/20 rounded-xl">
             <Code2 className="w-4 h-4 text-indigo-400" />
-            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">v12.0-Ultra</span>
+            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">v10.1-Ultra</span>
           </div>
         </div>
       </div>
