@@ -46,11 +46,11 @@ export function ArchitectureTab() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight font-display text-white">Arquitetura Nexus</h2>
-          <p className="text-slate-400 mt-1 text-sm font-light">Infraestrutura de alto desempenho v10.1-Ultra.</p>
+          <p className="text-slate-400 mt-1 text-sm font-light">Infraestrutura de alto desempenho v16.0.</p>
         </div>
         <div className="flex items-center gap-2 px-4 py-2 bg-blue-600/10 border border-blue-500/20 rounded-xl backdrop-blur-md">
           <Cpu className="w-4 h-4 text-blue-400" />
-          <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Engine v10.1</span>
+          <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Engine v16.0</span>
         </div>
       </div>
 

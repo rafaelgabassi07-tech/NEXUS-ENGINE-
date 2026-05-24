@@ -1,5 +1,5 @@
 export type AssetType = 'ACAO' | 'FII';
-export type ExtendedAssetType = AssetType | 'BDR' | 'ETF';
+export type ExtendedAssetType = AssetType | 'BDR' | 'ETF' | 'STOCK';
 export type CacheStatus = 'HIT' | 'MISS' | 'DEDUPE' | 'ERROR' | 'STALE';
 export type DataSource = string;
 

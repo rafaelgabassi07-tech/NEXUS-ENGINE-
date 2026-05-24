@@ -1,7 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Search, Zap, Terminal, Info, XCircle, CheckCircle2, Globe, Cpu, Copy, Eye } from 'lucide-react';
+import { Search, Zap, Terminal, Info, XCircle, CheckCircle2, Globe, Cpu, Copy, Eye, TrendingUp, History } from 'lucide-react';
 import { cn } from '../lib/utils';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  AreaChart,
+  Area
+} from 'recharts';
 
 import { ExtendedAssetType } from '../lib/nexus/types.js';
 
@@ -14,6 +26,25 @@ export function TestTab() {
   const [error, setError] = useState('');
   const [logs, setLogs] = useState<string[]>([]);
   const [revealedResults, setRevealedResults] = useState<Record<number, boolean>>({});
+  const [historyData, setHistoryData] = useState<any[]>([]);
+
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch('/api/history');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.history) {
+          setHistoryData(data.history);
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao buscar historico:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
 
   const addLog = (msg: string) => {
     setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`].slice(-100));
@@ -72,6 +103,7 @@ export function TestTab() {
       }
 
       setResults(data.results);
+      fetchHistory();
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro');
       addLog(`ERRO: ${err.message}`);
@@ -89,7 +121,7 @@ export function TestTab() {
       className="space-y-5"
     >
       <div>
-        <h2 className="text-3xl font-bold tracking-tight font-display text-white">Testar Nexus Engine <span className="text-xs font-normal text-slate-500 opacity-50">v10.1-Ultra</span></h2>
+        <h2 className="text-3xl font-bold tracking-tight font-display text-white">Testar Nexus Engine <span className="text-xs font-normal text-slate-500 opacity-50">v16.0</span></h2>
         <p className="text-slate-400 mt-2">Execute testes de extração em tempo real contra a infraestrutura Nexus.</p>
       </div>
 
@@ -99,7 +131,7 @@ export function TestTab() {
             <h3 className="text-lg font-bold font-display text-white">Configuração</h3>
             <div className="flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full">
               <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Nexus v10.1-Ultra</span>
+              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Nexus v16.0</span>
             </div>
           </div>
           
@@ -390,6 +422,79 @@ export function TestTab() {
           </div>
         </div>
       )}
+
+      {/* SEÇÃO DE HISTÓRICO & PERSISTÊNCIA DAS TENDÊNCIAS */}
+      <div className="glass rounded-3xl border border-slate-800/50 p-6 shadow-2xl card-shadow space-y-6 mt-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-bold font-display text-white flex items-center gap-2">
+              <History className="w-5 h-5 text-indigo-400" />
+              Séries Temporais & Tendências de Pesquisas
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Visualização sincronizada de dados persistidos pelo motor (OLAP Core Sync).
+            </p>
+          </div>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-900 border border-slate-800 px-3 py-1 rounded-full">
+            {historyData.length} Registros Salvos
+          </span>
+        </div>
+
+        {historyData.length === 0 ? (
+          <div className="p-12 text-center bg-slate-950/40 rounded-2xl border border-slate-800/60">
+            <TrendingUp className="w-8 h-8 text-slate-700 mx-auto mb-3 animate-pulse" />
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Sem dados históricos acumulados</p>
+            <p className="text-[11px] text-slate-600 mt-1">Execute o Scraper acima com tickers válidos para alimentar as séries temporais persistidas.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="xl:col-span-2 space-y-4">
+              <div className="h-[270px] bg-slate-950/60 p-4 rounded-2xl border border-slate-800/50">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                  <TrendingUp className="w-3.5 h-3.5 text-blue-400" /> Comparativo de Cotações nos Scrapes Recentes (R$)
+                </p>
+                <ResponsiveContainer width="100%" height="85%">
+                  <BarChart data={historyData.slice(-15)}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="ticker" stroke="#64748b" fontSize={10} tickLine={false} />
+                    <YAxis stroke="#64748b" fontSize={10} tickLine={false} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', borderRadius: '12px', fontSize: '11px' }}
+                      labelStyle={{ fontWeight: 'bold', color: '#fff' }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '10px' }} />
+                    <Bar dataKey="preco" name="Preço (R$)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="dy" name="Dividend Yield (%)" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                <History className="w-3.5 h-3.5 text-indigo-400" /> Registro de Atividades Recentes
+              </p>
+              <div className="max-h-[230px] overflow-y-auto space-y-2 bg-slate-950/30 p-3 rounded-2xl border border-slate-800/60 scrollbar-thin scrollbar-thumb-slate-800 pr-1">
+                {historyData.slice().reverse().map((entry: any, i: number) => (
+                  <div key={i} className="p-3 bg-slate-900 border border-slate-800/60 rounded-xl flex items-center justify-between hover:border-slate-700 transition-all">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-white font-mono">{entry.ticker}</span>
+                        <span className="text-[8px] font-extrabold text-blue-400 bg-blue-900/25 border border-blue-800/60 px-1 py-0.5 rounded uppercase">{entry.type}</span>
+                      </div>
+                      <span className="text-[8px] text-slate-500 font-medium">{new Date(entry.timestamp).toLocaleString()}</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-extrabold text-emerald-400">R$ {entry.preco?.toFixed(2)}</p>
+                      <p className="text-[9px] text-slate-400 font-bold">DY {entry.dy?.toFixed(2)}%</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </motion.div>
   );
 }

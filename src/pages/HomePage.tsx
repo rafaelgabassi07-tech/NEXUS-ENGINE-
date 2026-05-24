@@ -123,7 +123,7 @@ export default function HomePage() {
           className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold uppercase tracking-widest mb-8 shadow-[0_0_20px_rgba(59,130,246,0.15)]"
         >
           <Zap className="w-3 h-3 animate-pulse" />
-          <span>Nexus Engine 10.1-Ultra</span>
+          <span>Nexus Engine 16.0</span>
         </motion.div>
         
         <motion.h1 
@@ -141,7 +141,7 @@ export default function HomePage() {
           transition={{ delay: 0.2, duration: 0.6 }}
           className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto mb-12 leading-relaxed font-light tracking-tight"
         >
-          Performance extrema com <span className="text-white font-medium">Nexus Engine 10.1-Ultra</span>. Orquestração Híbrida e Cache SWR para dados financeiros em milissegundos.
+          Performance extrema com <span className="text-white font-medium">Nexus Engine 16.0</span>. Orquestração Híbrida e Cache SWR para dados financeiros em milissegundos.
         </motion.p>
         
         <motion.div 

@@ -30,7 +30,7 @@ export function SettingsTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight font-display text-white">Configurações</h2>
-          <p className="text-slate-400 mt-1 text-xs font-light">Parâmetros do Nexus Engine 10.1-Ultra.</p>
+          <p className="text-slate-400 mt-1 text-xs font-light">Parâmetros do Nexus Engine 16.0.</p>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 border border-white/5 rounded-xl">
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -111,7 +111,7 @@ export function SettingsTab() {
         <div className="glass-dark border border-white/5 rounded-2xl p-5 md:col-span-2">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { label: 'Versão', value: 'v10.1-ultra' },
+              { label: 'Versão', value: 'v16.0' },
               { label: 'Runtime', value: 'Node 20.x' },
               { label: 'Infra', value: 'Vercel' },
               { label: 'Uptime', value: '99.98%' }

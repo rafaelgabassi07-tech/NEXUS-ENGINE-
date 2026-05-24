@@ -51,6 +51,33 @@ export function InfoTab({ nexusCode }: InfoTabProps) {
     setTimeout(() => setCopied(null), 2000);
   };
 
+  const [downloadingReadme, setDownloadingReadme] = useState(false);
+
+  const handleDownloadReadme = async () => {
+    try {
+      setDownloadingReadme(true);
+      const res = await fetch('/api/readme');
+      if (!res.ok) throw new Error('Falha ao buscar README.md');
+      const data = await res.json();
+      if (!data.content) throw new Error('Conteúdo vazio');
+
+      const blob = new Blob(['\ufeff', data.content], { type: 'text/markdown;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'README.md');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download README failed:', error);
+      alert('Erro ao baixar o README.md detalhado.');
+    } finally {
+      setDownloadingReadme(false);
+    }
+  };
+
   const endpoints = [
     { name: 'Nexus Scraper', method: 'POST', path: '/api/scrape', desc: 'Extração rápida e simplificada via Nexus Engine.' },
     { name: 'Health Check', method: 'GET', path: '/api/health', desc: 'Status operacional e integridade do sistema.' }
@@ -79,7 +106,7 @@ const batch = await runNexusBatch(['VALE3', 'ITUB4'], 'ACAO');`;
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight font-display text-white">Documentação</h2>
-          <p className="text-slate-400 mt-1 text-sm font-light">Guia de integração Nexus Engine 10.1-Ultra.</p>
+          <p className="text-slate-400 mt-1 text-sm font-light">Guia de integração Nexus Engine 16.0.</p>
         </div>
         <div className="flex items-center gap-2">
           <button 
@@ -91,6 +118,15 @@ const batch = await runNexusBatch(['VALE3', 'ITUB4'], 'ACAO');`;
             Engine JS
           </button>
           <button 
+            onClick={handleDownloadReadme} 
+            disabled={downloadingReadme}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-indigo-900/20 active:scale-95 group"
+            title="Baixar README.md detalhado"
+          >
+            <Download className="w-4 h-4 group-hover:animate-bounce" />
+            {downloadingReadme ? 'Baixando...' : 'README.md'}
+          </button>
+          <button 
             onClick={handleCopyCode} 
             className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition-all border border-white/5 active:scale-95"
             title="Copiar código para a área de transferência"
@@ -100,7 +136,7 @@ const batch = await runNexusBatch(['VALE3', 'ITUB4'], 'ACAO');`;
           </button>
           <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-indigo-600/10 border border-indigo-500/20 rounded-xl">
             <Code2 className="w-4 h-4 text-indigo-400" />
-            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">v10.1-Ultra</span>
+            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">v16.0</span>
           </div>
         </div>
       </div>
