@@ -1,11 +1,12 @@
 import { useState, useEffect, type MouseEvent } from 'react';
 import { BrowserRouter, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Focus, Settings, MessageCircleQuestion, Menu, X } from 'lucide-react';
+import { Focus, Settings, MessageCircleQuestion, Menu, X, Activity } from 'lucide-react';
 import { cn } from './lib/utils';
 import { AnimatePresence, motion } from 'motion/react';
 import HomePage from './pages/HomePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { FAQPage } from './pages/FAQPage';
+import { TrafficCenterPage } from './pages/TrafficCenterPage';
 
 /**
  * Component that resets scroll to top on every route change.
@@ -96,6 +97,9 @@ function Header() {
             </a>
           ))}
           <div className="h-4 w-px bg-slate-800" />
+          <Link to="/traffic" className="hover:text-white transition-colors" title="Central de Tráfego">
+            <Activity className="w-5 h-5 flex-shrink-0" />
+          </Link>
           <Link to="/settings" className="hover:text-white transition-colors" title="Configurações">
             <Settings className="w-5 h-5" />
           </Link>
@@ -131,11 +135,14 @@ function Header() {
                 </a>
               ))}
               <div className="border-t border-slate-800 pt-4 flex gap-4">
+                <Link to="/traffic" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2 text-slate-300 hover:text-white">
+                  <Activity className="w-5 h-5 flex-shrink-0" /> Tráfego
+                </Link>
                 <Link to="/settings" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2 text-slate-300 hover:text-white">
-                  <Settings className="w-5 h-5" /> Configurações
+                  <Settings className="w-5 h-5 flex-shrink-0" /> Configurações
                 </Link>
                 <Link to="/faq" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2 text-slate-300 hover:text-white">
-                  <MessageCircleQuestion className="w-5 h-5" /> Dúvidas
+                  <MessageCircleQuestion className="w-5 h-5 flex-shrink-0" /> Dúvidas
                 </Link>
               </div>
             </div>
@@ -164,6 +171,7 @@ export default function App() {
         <Header />
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/traffic" element={<TrafficCenterPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/faq" element={<FAQPage />} />
         </Routes>

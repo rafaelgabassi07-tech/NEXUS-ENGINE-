@@ -15,7 +15,7 @@
 6. [Classe NexusEngineUltra](#6-classe-nexusengineultra)
 7. [Templates e Campos Extraídos](#7-templates-e-campos-extraídos)
 8. [Schemas Zod](#8-schemas-zod)
-9. [Integração AeroScrape](#9-integração-aeroscrape)
+9. [Integração NexusProxy](#9-integração-nexusproxy)
 10. [Sistema de Cache (LRU + SWR)](#10-sistema-de-cache-lru--swr)
 11. [Circuit Breaker](#11-circuit-breaker)
 12. [Rate Limiter por Domínio](#12-rate-limiter-por-domínio)
@@ -38,7 +38,7 @@ O **Nexus Engine Ultra** é um motor de extração de dados financeiros focado e
 
 | Prioridade | Fonte | Tipo | Dados |
 |:---:|---|---|---|
-| 1 | **AeroScrape API** *(se configurado)* | Proxy HTTP + Cache | HTML completo com cache ETag/SWR |
+| 1 | **NexusProxy API** *(se configurado)* | Proxy HTTP + Cache | HTML completo com cache ETag/SWR |
 | 2 | **Investidor10** | Scraping direto | Fundamentos, DY, info da empresa, dividendos |
 | 3 | **StatusInvest** | Scraping direto (fallback) | Fundamentos complementares |
 | 4 | **Yahoo Finance** | API JSON | Cotação em tempo real, métricas adicionais |
@@ -87,7 +87,7 @@ O **Nexus Engine Ultra** é um motor de extração de dados financeiros focado e
 │                 │                             │           │
 │  ┌──────────────▼───────────────────────┐    │           │
 │  │        _streamAndParse()             │    │           │
-│  │  1. AeroScrape (se useAeroScrape)    │    │           │
+│  │  1. NexusProxy (se useNexusProxy)    │    │           │
 │  │  2. fetchWithJitter (direto)         │    │           │
 │  │  3. streaming + universalLexer       │    │           │
 │  │  4. Zod safeParse (fallback parcial) │    │           │
@@ -99,13 +99,13 @@ O **Nexus Engine Ultra** é um motor de extração de dados financeiros focado e
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Fluxo do AeroScrape Batch
+### Fluxo do NexusProxy Batch
 
 ```
 fetchAtivosBatch([PETR4/ACAO, MXRF11/FII, IVVB11/ETF])
        │
        ▼
-_sendAeroBatch(jobs[]) → POST /api/batch-scrape
+_sendNexusProxyBatch(jobs[]) → POST /api/batch-scrape
        │  jobs: [{id:"PETR4_i10", url:..., returnHtml:true}, ...]
        │  concurrency: 8, max: 25 jobs por chamada
        ▼
@@ -130,7 +130,7 @@ npm install zod
 ```typescript
 import { NexusEngineUltra } from './nexus-engine';
 
-// Configuração padrão — sem AeroScrape
+// Configuração padrão — sem NexusProxy
 NexusEngineUltra.configure({
   cacheTtlMs:       24 * 60 * 60 * 1000,  // 24h
   cacheStaleMs:     5  * 60 * 1000,        // 5min
@@ -143,26 +143,26 @@ NexusEngineUltra.configure({
 });
 ```
 
-### Configuração com AeroScrape
+### Configuração com NexusProxy
 
 ```typescript
 NexusEngineUltra.configure({
-  useAeroScrape:       true,
-  aeroScrapeUrl:       'https://aero-scrape.vercel.app/api/scrape',
-  aeroScrapeBatchUrl:  'https://aero-scrape.vercel.app/api/batch-scrape',
-  aeroScrapeTimeoutMs: 12_000,
-  aeroScrapeRetries:   2,
+  useNexusProxy:       true,
+  nexusProxyUrl:       'https://valorae-proxy.vercel.app/api/scrape',
+  nexusProxyBatchUrl:  'https://valorae-proxy.vercel.app/api/batch-scrape',
+  nexusProxyTimeoutMs: 12_000,
+  nexusProxyRetries:   2,
 });
 ```
 
 ### Configuração via variáveis de ambiente
 
 ```bash
-AEROSCRAPE_URL=https://aero-scrape.vercel.app/api/scrape
-AEROSCRAPE_BATCH_URL=https://aero-scrape.vercel.app/api/batch-scrape
-AEROSCRAPE_TIMEOUT_MS=12000
-AEROSCRAPE_RETRIES=2
-AEROSCRAPE_TARGET_USER_AGENT=Mozilla/5.0 (Windows NT 10.0; Win64; x64)...
+NEXUS_PROXY_URL=https://valorae-proxy.vercel.app/api/scrape
+NEXUS_PROXY_BATCH_URL=https://valorae-proxy.vercel.app/api/batch-scrape
+NEXUS_PROXY_TIMEOUT_MS=12000
+NEXUS_PROXY_RETRIES=2
+NEXUS_PROXY_TARGET_USER_AGENT=Mozilla/5.0 (Windows NT 10.0; Win64; x64)...
 ```
 
 ---
@@ -220,7 +220,7 @@ runNexusBatch(tickers[], type?, opts?, includeNews?) → Promise<any[]>
 // Batch com inferência automática de tipo
 runNexusBatchAuto(tickers[], opts?, includeNews?) → Promise<any[]>
 
-// Batch de carteira mista — usa AeroScrape batch quando disponível ← novo v16
+// Batch de carteira mista — usa NexusProxy batch quando disponível ← novo v16
 fetchAtivosBatch(ativos[], includeNews?) → Promise<any[]>
 
 // Notícias via Google News RSS
@@ -265,7 +265,7 @@ universalLexer(html, template, existingResults?, htmlLower?) → Partial<T>
 |---|---|
 | `configure(opts)` | Atualiza opções globais do engine |
 | `fetchAtivo(ticker, type?, includeNews?)` | Fetch completo de um ativo |
-| `fetchAtivosBatch(ativos[], includeNews?)` | Batch com AeroScrape ← novo v16 |
+| `fetchAtivosBatch(ativos[], includeNews?)` | Batch com NexusProxy ← novo v16 |
 | `fetchB3(ticker)` | Retrocompatibilidade — chama `fetchAtivo(..., 'ACAO')` |
 | `fetchHistoricoGrafico(ticker, range?, interval?)` | Histórico OHLCV via Yahoo |
 | `fetchDividends(ticker)` | Histórico de dividendos via Yahoo |
@@ -290,11 +290,11 @@ universalLexer(html, template, existingResults?, htmlLower?) → Partial<T>
 | `concurrencyLimit` | `number` | `5` | Máximo de tasks paralelas no batch |
 | `domainRps` | `number` | `2` | Requests/segundo por domínio |
 | `domainBurst` | `number` | `5` | Burst máximo do token bucket |
-| `useAeroScrape` | `boolean` | `false` | Ativa AeroScrape como fonte primária |
-| `aeroScrapeUrl` | `string` | `''` | URL do `/api/scrape` |
-| `aeroScrapeBatchUrl` | `string` | `''` | URL do `/api/batch-scrape` |
-| `aeroScrapeTimeoutMs` | `number` | `12000` | Timeout para o AeroScrape (ms) |
-| `aeroScrapeRetries` | `number` | `2` | Retentativas no AeroScrape |
+| `useNexusProxy` | `boolean` | `false` | Ativa NexusProxy como fonte primária |
+| `nexusProxyUrl` | `string` | `''` | URL do `/api/scrape` |
+| `nexusProxyBatchUrl` | `string` | `''` | URL do `/api/batch-scrape` |
+| `nexusProxyTimeoutMs` | `number` | `12000` | Timeout para o NexusProxy (ms) |
+| `nexusProxyRetries` | `number` | `2` | Retentativas no NexusProxy |
 
 ---
 
@@ -531,31 +531,31 @@ const zArr    = () => z.array(z.any()).optional();
 
 ---
 
-## 9. Integração AeroScrape
+## 9. Integração NexusProxy
 
-O AeroScrape (v3.8) é um engine de scraping serverless com cache LRU/SWR, circuit breaker por domínio e endpoint batch com coalescing. O Nexus Engine o usa como **camada primária** quando `useAeroScrape: true`.
+O NexusProxy (v3.8) é um engine de scraping serverless com cache LRU/SWR, circuit breaker por domínio e endpoint batch com coalescing. O Nexus Engine o usa como **camada primária** quando `useNexusProxy: true`.
 
 ### Fluxo de decisão em `_streamAndParse`
 
 ```
 _streamAndParse(source, cb)
   │
-  ├─ useAeroScrape == true?
+  ├─ useNexusProxy == true?
   │    │
-  │    ├─ getCB('aeroscrape').isOpen() == false?
+  │    ├─ getCB('nexusproxy').isOpen() == false?
   │    │    │
-  │    │    └─ _fetchViaAeroScrape(source, aeroCB)
+  │    │    └─ _fetchViaNexusProxy(source, proxyCB)
   │    │         ├─ POST /api/scrape { url, returnHtml: true, includeScripts: false }
   │    │         ├─ res.html → universalLexer → Zod.safeParse
   │    │         ├─ retorna { data, bytes, cacheStatus }
-  │    │         └─ em falha: aeroCB.recordFailure() → throw → fallback abaixo
+  │    │         └─ em falha: proxyCB.recordFailure() → throw → fallback abaixo
   │    │
   │    └─ (CB aberto → pula direto para fetch direto)
   │
   └─ fetchWithJitter(url) → streaming → universalLexer → Zod.safeParse
 ```
 
-### Payload enviado ao AeroScrape
+### Payload enviado ao NexusProxy
 
 ```json
 {
@@ -570,9 +570,9 @@ _streamAndParse(source, cb)
 }
 ```
 
-> `includeScripts: false` ativa o fast path `single-pass` do AeroScrape, que é **12x mais rápido** que o parse AST completo para seletores simples (conforme benchmark do README AeroScrape v3.8).
+> `includeScripts: false` ativa o fast path `single-pass` do NexusProxy, que é **12x mais rápido** que o parse AST completo para seletores simples (conforme benchmark do README NexusProxy v3.8).
 
-### AeroScrape Batch
+### NexusProxy Batch
 
 ```typescript
 // Carteira mista — uma chamada HTTP para múltiplos ativos
@@ -586,7 +586,7 @@ const resultado = await fetchAtivosBatch([
 
 Internamente gera 2 jobs por ativo (Investidor10 + StatusInvest), fazendo no máximo 25 jobs por chamada. Para carteiras maiores, o engine cria sub-batches automaticamente.
 
-### cacheStatus do AeroScrape
+### cacheStatus do NexusProxy
 
 | Status | Significado |
 |---|---|
@@ -641,7 +641,7 @@ console.log(stats.session);
 
 ## 11. Circuit Breaker
 
-Cada domínio (`investidor10`, `statusinvest`, `aeroscrape`) tem seu próprio circuit breaker independente.
+Cada domínio (`investidor10`, `statusinvest`, `nexusproxy`) tem seu próprio circuit breaker independente.
 
 ### Estados e transições
 
@@ -861,11 +861,11 @@ Conjunto de strings que indicam valor ausente ou inválido. Inclui: `-`, `—`, 
 
 | Variável | Padrão | Descrição |
 |---|---|---|
-| `AEROSCRAPE_URL` | `https://aero-scrape.vercel.app/api/scrape` | Endpoint scrape unitário |
-| `AEROSCRAPE_BATCH_URL` | `https://aero-scrape.vercel.app/api/batch-scrape` | Endpoint batch |
-| `AEROSCRAPE_TIMEOUT_MS` | `12000` | Timeout (ms) |
-| `AEROSCRAPE_RETRIES` | `2` | Retentativas |
-| `AEROSCRAPE_TARGET_USER_AGENT` | `Chrome 136...` | UA enviado como header ao site alvo |
+| `NEXUS_PROXY_URL` | `https://valorae-proxy.vercel.app/api/scrape` | Endpoint scrape unitário |
+| `NEXUS_PROXY_BATCH_URL` | `https://valorae-proxy.vercel.app/api/batch-scrape` | Endpoint batch |
+| `NEXUS_PROXY_TIMEOUT_MS` | `12000` | Timeout (ms) |
+| `NEXUS_PROXY_RETRIES` | `2` | Retentativas |
+| `NEXUS_PROXY_TARGET_USER_AGENT` | `Chrome 136...` | UA enviado como header ao site alvo |
 
 As variáveis de ambiente têm precedência menor que os valores passados via `configure()`.
 
@@ -932,12 +932,12 @@ const resultados = await runNexusBatchAuto([
 ]);
 ```
 
-### Carteira mista com AeroScrape Batch
+### Carteira mista com NexusProxy Batch
 
 ```typescript
 import { fetchAtivosBatch, NexusEngineUltra } from './nexus-engine';
 
-NexusEngineUltra.configure({ useAeroScrape: true });
+NexusEngineUltra.configure({ useNexusProxy: true });
 
 const carteira = await fetchAtivosBatch([
   { ticker: 'PETR4',  type: 'ACAO'  },
@@ -950,7 +950,7 @@ const carteira = await fetchAtivosBatch([
 
 // Uma única chamada HTTP para até 25 ativos
 // Coalescing automático: PETR4_i10 e MXRF11_i10 compartilham
-// o mesmo fetch se o AeroScrape já tiver em cache
+// o mesmo fetch se o NexusProxy já tiver em cache
 ```
 
 ### Template customizado
@@ -1004,7 +1004,7 @@ console.log(report.cacheStats);
 //   circuitBreakers: {
 //     investidor10: { estado: 'FECHADO', falhas: 0 },
 //     statusinvest: { estado: 'FECHADO', falhas: 0 },
-//     aeroscrape:   { estado: 'FECHADO', falhas: 0 }
+//     nexusproxy:   { estado: 'FECHADO', falhas: 0 }
 //   }
 // }
 ```
@@ -1017,7 +1017,7 @@ console.log(report.cacheStats);
 
 ```
 1. Cache HIT                → latência ~0ms
-2. AeroScrape (se ativo)    → cache ETag + single-pass
+2. NexusProxy (se ativo)    → cache ETag + single-pass
 3. Fetch direto Investidor10 → streaming com overlap
 4. Fetch direto StatusInvest → dados complementares
 5. Yahoo Finance             → preenche lacunas
@@ -1035,7 +1035,7 @@ console.log(report.cacheStats);
 | Timeout | Abort controller + retry com jitter |
 | Zod validation fail | Retorna dados parciais (rawData) |
 | Todos os CBs abertos | Lança `Error('Todos os Circuit Breakers abertos')` |
-| AeroScrape fail | Log de warning + cai para fetch direto automaticamente |
+| NexusProxy fail | Log de warning + cai para fetch direto automaticamente |
 
 ### Backoff exponencial com jitter
 
@@ -1050,14 +1050,14 @@ Para RateLimit com Retry-After: delay = retryAfterMs
 
 ## 20. Changelog v16.0
 
-### Integração AeroScrape API v3.8
-- Adicionados `_fetchViaAeroScrape`, `fetchAtivosBatch`, `_sendAeroBatch`, `_processBatchResults`
+### Integração NexusProxy API v3.8
+- Adicionados `_fetchViaNexusProxy`, `fetchAtivosBatch`, `_sendNexusProxyBatch`, `_processBatchResults`
 - Sub-batching automático para carteiras com mais de 25 ativos
-- Circuit breaker independente para o domínio `aeroscrape`
+- Circuit breaker independente para o domínio `nexusproxy`
 - Resolução de URLs por precedência: `configure()` → env vars → endpoint público
 - Header `X-Cache-Version` para controle de invalidação no servidor
-- `AEROSCRAPE_CACHE_VERSION = '2026-05-23-nexus-v16'`
-- `useAeroScrape`, `aeroScrapeUrl`, `aeroScrapeBatchUrl`, `aeroScrapeTimeoutMs`, `aeroScrapeRetries` em `NexusEngineOptions`
+- `NEXUS_PROXY_CACHE_VERSION = '2026-05-23-nexus-v16'`
+- `useNexusProxy`, `nexusProxyUrl`, `nexusProxyBatchUrl`, `nexusProxyTimeoutMs`, `nexusProxyRetries` em `NexusEngineOptions`
 
 ### Novos campos — Ações (acaoTemplate / B3Schema)
 - **Fundamentos**: `psr`, `payout`, `margemEbit`, `margemEbitda`, `evEbit`, `pEbitda`, `pEbit`, `pAtivo`, `pCapGiro`, `pAtivoCircLiq`, `giroAtivos`, `roa`
@@ -1112,7 +1112,7 @@ Para RateLimit com Retry-After: delay = retryAfterMs
 - `valorDeMercado` também preenchido por `marketCap` do Yahoo
 
 ### Métricas
-- `getCacheStats()` inclui CB do `aeroscrape`
+- `getCacheStats()` inclui CB do `nexusproxy`
 - `getDetailedReport()` versão `v16.0` com 24 capabilities listadas
 
 ### Bugs corrigidos

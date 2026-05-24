@@ -68,16 +68,18 @@ export interface NexusEngineOptions {
   concurrencyLimit?: number;
   domainRps?: number;
   domainBurst?: number;
-  /** NOVO v16 — Ativa AeroScrape como camada primária de fetch e cache. */
-  useAeroScrape?: boolean;
-  /** NOVO v16 — URL do endpoint /api/scrape (sobrescreve env AEROSCRAPE_URL). */
-  aeroScrapeUrl?: string;
-  /** NOVO v16 — URL do endpoint /api/batch-scrape (sobrescreve env AEROSCRAPE_BATCH_URL). */
-  aeroScrapeBatchUrl?: string;
-  /** NOVO v16 — Timeout para chamadas ao AeroScrape em ms. Default: 12000. */
-  aeroScrapeTimeoutMs?: number;
-  /** NOVO v16 — Número de retentativas no AeroScrape. Default: 2. */
-  aeroScrapeRetries?: number;
+  /** NOVO v16 — Ativa NexusProxy como camada primária de fetch e cache. */
+  useNexusProxy?: boolean;
+  /** NOVO v16 — URL do endpoint /api/scrape (sobrescreve env NEXUS_PROXY_URL). */
+  nexusProxyUrl?: string;
+  /** NOVO v16 — URL do endpoint /api/batch-scrape (sobrescreve env NEXUS_PROXY_BATCH_URL). */
+  nexusProxyBatchUrl?: string;
+  /** NOVO v16 — Timeout para chamadas ao NexusProxy em ms. Default: 12000. */
+  nexusProxyTimeoutMs?: number;
+  /** NOVO v16 — Número de retentativas no NexusProxy. Default: 2. */
+  nexusProxyRetries?: number;
+  /** NOVO v17 — Dispatcher customizado para Node fetch (ex: proxy via undici.ProxyAgent). */
+  fetchDispatcher?: any;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -140,10 +142,10 @@ const DIAS_POR_PERIODO: Readonly<Record<string, number>> = {
 };
 
 /**
- * NOVO v16 — Versão de cache do AeroScrape.
+ * NOVO v16 — Versão de cache do NexusProxy.
  * Incrementar sempre que seletores ou templates forem alterados.
  */
-const AEROSCRAPE_CACHE_VERSION = '2026-05-23-nexus-v16';
+const NEXUS_PROXY_CACHE_VERSION = '2026-05-23-nexus-v16';
 
 // ════════════════════════════════════════════════════════════════════════════
 // 3. GUARD: process.cpuUsage (Node-specific)
@@ -203,42 +205,35 @@ export function normalizeBRNumber(raw: string): number | string {
  * Tickers puramente alfabéticos (sem dígito) são considerados STOCK.
  */
 export function inferAssetType(ticker: string): ExtendedAssetType {
-  const clean = canonicalizeTicker(ticker);
-  // Ticker estrangeiro puro (ex: AAPL, MSFT, GOOGL)
-  if (/^[A-Z]{1,5}$/.test(clean)) return 'STOCK';
-  if (RE_BDR.test(clean)) return 'BDR';
-  if (clean.endsWith('11')) return ETFS_CONHECIDOS.has(clean) ? 'ETF' : 'FII';
-  if (clean.endsWith('12')) return 'FII';
+  const t = ticker.trim().toUpperCase();
+  if (ETFS_CONHECIDOS.has(t)) return 'ETF';
+  if (RE_BDR.test(t)) return 'BDR';
+  if (t.endsWith('11')) return 'FII';
+  if (/^[A-Z]{1,5}$/.test(t)) return 'STOCK';
   return 'ACAO';
 }
 
 export function canonicalizeTicker(raw: string): string {
-  return raw.trim().replace(RE_ESPACO, '').replace(RE_SA, '').toUpperCase();
+  if (!raw) return '';
+  return raw.replace(RE_SA, '').trim().toUpperCase();
 }
 
-export async function fetchNews(ticker: string): Promise<NewsItem[]> {
-  return NexusEngineUltra.fetchNews(ticker);
-}
-
-function validarTicker(clean: string): string | null {
+export function validarTicker(ticker: string): string | null {
+  const clean = ticker.trim().toUpperCase();
   if (!clean) return 'Ticker vazio';
-  if (!RE_TICKER.test(clean)) return `Formato inválido: "${clean}"`;
+  if (!RE_TICKER.test(clean)) return `Ticker inválido: ${clean}`;
   return null;
 }
 
-const _uaLen = USER_AGENTS.length;
+export function backoffMs(attempt: number, baseDelay = 500): number {
+  const cap = 15000;
+  const delay = Math.min(cap, baseDelay * Math.pow(2, attempt));
+  return Math.random() * delay;
+}
+
 function getRandomAgent(): string {
-  return USER_AGENTS[Math.floor(Math.random() * _uaLen)];
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
-
-function backoffMs(attempt: number, base = 500, cap = 20_000): number {
-  const ceiling = Math.min(cap, base * 2 ** attempt);
-  return Math.random() * ceiling;
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// 5. LRU CACHE — corrigido
-// ════════════════════════════════════════════════════════════════════════════
 
 class LRUCache<V> {
   private mapa = new Map<string, { data: V; expiresAt: number; staleAt: number }>();
@@ -287,6 +282,28 @@ class LRUCache<V> {
   clear(): void                { this.mapa.clear(); this._opCount = 0; }
   get tamanho(): number        { return this.mapa.size; }
   get tamanhoMax(): number     { return this.maxSize; }
+
+  /** NOVO v16.1 — Exporta entradas não-expiradas como objeto para persistência no disco. */
+  serialize(): Record<string, { data: V; expiresAt: number; staleAt: number }> {
+    const obj: Record<string, { data: V; expiresAt: number; staleAt: number }> = {};
+    const now = Date.now();
+    for (const [k, v] of this.mapa) {
+      if (now <= v.expiresAt) {
+        obj[k] = v;
+      }
+    }
+    return obj;
+  }
+
+  /** NOVO v16.1 — Popula o cache a partir de objeto desserializado. */
+  populate(items: Record<string, { data: V; expiresAt: number; staleAt: number }>): void {
+    const now = Date.now();
+    for (const [k, v] of Object.entries(items)) {
+      if (now <= v.expiresAt) {
+        this.mapa.set(k, { data: v.data, expiresAt: v.expiresAt, staleAt: v.staleAt });
+      }
+    }
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -494,6 +511,10 @@ export function universalLexer<T = any>(
         anchorLower = anchor.toLowerCase();
         _anchorLowerCache.set(anchor, anchorLower);
       }
+
+      // ULTRA OPTIMIZATION: Match pre-check. If anchor text is not present in the HTML at all,
+      // skip attempting any strategies to avoid multiple expensive substring searches.
+      if (!htmlLower.includes(anchorLower)) continue;
 
       let idx = -1;
       for (const strategy of ANCHOR_STRATEGIES) {
@@ -1261,7 +1282,7 @@ async function fetchJson(url: string, timeoutMs: number): Promise<any> {
     const ctrl  = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const res = await fetch(url, {
+      const fetchOpts: any = {
         signal:  ctrl.signal,
         headers: {
           'Accept': 'application/json, text/plain, */*',
@@ -1269,7 +1290,13 @@ async function fetchJson(url: string, timeoutMs: number): Promise<any> {
           'Origin': 'https://finance.yahoo.com',
           'Referer': 'https://finance.yahoo.com/',
         },
-      });
+      };
+      const ultraOpts = (NexusEngineUltra as any)._options;
+      if (ultraOpts && ultraOpts.fetchDispatcher) {
+        fetchOpts.dispatcher = ultraOpts.fetchDispatcher;
+      }
+      
+      const res = await fetch(url, fetchOpts);
       if (res.status === 403 || res.status === 401) {
         console.warn(`[Yahoo Finance] HTTP ${res.status} para ${url} — ignorando.`);
         return null;
@@ -1380,11 +1407,11 @@ export class NexusEngineUltra {
     domainRps:           2,
     domainBurst:         5,
     /** NOVO v16 */
-    useAeroScrape:       false,
-    aeroScrapeUrl:       '',
-    aeroScrapeBatchUrl:  '',
-    aeroScrapeTimeoutMs: 12_000,
-    aeroScrapeRetries:   2,
+    useNexusProxy:       true,
+    nexusProxyUrl:       '',
+    nexusProxyBatchUrl:  '',
+    nexusProxyTimeoutMs: 12_000,
+    nexusProxyRetries:   2,
   };
 
   private static _rateLimiters = new Map<string, DomainRateLimiter>();
@@ -1416,28 +1443,28 @@ export class NexusEngineUltra {
     this._circuitBreakers.get(domain)?.reset();
   }
 
-  // ── Resolução de URLs AeroScrape (env vars + override) ───────────────────
+  // ── Resolução de URLs NexusProxy (env vars + override) ───────────────────
 
   /**
-   * NOVO v16 — Resolve URL do AeroScrape com precedência:
-   * 1. _options.aeroScrapeUrl (via configure())
-   * 2. env AEROSCRAPE_URL
+   * NOVO v16 — Resolve URL do NexusProxy com precedência:
+   * 1. _options.nexusProxyUrl (via configure())
+   * 2. env NEXUS_PROXY_URL
    * 3. Endpoint público padrão
    */
-  private static _getAeroUrl(): string {
-    return this._options.aeroScrapeUrl
-      || (typeof process !== 'undefined' ? process.env?.AEROSCRAPE_URL ?? '' : '')
-      || 'https://aero-scrape.vercel.app/api/scrape';
+  private static _getNexusProxyUrl(): string {
+    return this._options.nexusProxyUrl
+      || (typeof process !== 'undefined' ? process.env?.NEXUS_PROXY_URL ?? '' : '')
+      || 'https://valorae-proxy.vercel.app/api/scrape';
   }
 
-  private static _getAeroBatchUrl(): string {
-    return this._options.aeroScrapeBatchUrl
-      || (typeof process !== 'undefined' ? process.env?.AEROSCRAPE_BATCH_URL ?? '' : '')
-      || 'https://aero-scrape.vercel.app/api/batch-scrape';
+  private static _getNexusProxyBatchUrl(): string {
+    return this._options.nexusProxyBatchUrl
+      || (typeof process !== 'undefined' ? process.env?.NEXUS_PROXY_BATCH_URL ?? '' : '')
+      || 'https://valorae-proxy.vercel.app/api/batch-scrape';
   }
 
-  private static _getAeroTargetUA(): string {
-    return (typeof process !== 'undefined' ? process.env?.AEROSCRAPE_TARGET_USER_AGENT ?? '' : '')
+  private static _getNexusProxyTargetUA(): string {
+    return (typeof process !== 'undefined' ? process.env?.NEXUS_PROXY_TARGET_USER_AGENT ?? '' : '')
       || USER_AGENTS[0];
   }
 
@@ -1505,10 +1532,15 @@ export class NexusEngineUltra {
       const timer = setTimeout(() => ctrl.abort(), this._options.fetchTimeoutMs);
 
       try {
-        const res = await fetch(url, {
+        const fetchOpts: any = {
           signal:  ctrl.signal,
           headers: requireStealth ? getStealthHeaders(url, hostname) : { 'User-Agent': getRandomAgent() },
-        });
+        };
+        if (this._options.fetchDispatcher) {
+          fetchOpts.dispatcher = this._options.fetchDispatcher;
+        }
+
+        const res = await fetch(url, fetchOpts);
         clearTimeout(timer);
 
         if (res.status === 429 || res.status === 503) {
@@ -1549,28 +1581,28 @@ export class NexusEngineUltra {
     throw lastErr;
   }
 
-  // ── AeroScrape: fetch primário via proxy (NOVO v16) ──────────────────────
+  // ── NexusProxy: fetch primário via proxy (NOVO v16) ──────────────────────
 
   /**
-   * NOVO v16 — Busca HTML via AeroScrape API e processa com universalLexer.
+   * NOVO v16 — Busca HTML via NexusProxy API e processa com universalLexer.
    * Benefícios: cache ETag/SWR/LRU no servidor, circuit breaker por domínio,
    * bypass de WAF via proxy Vercel, coalescing de requests duplicados.
    *
-   * Headers do payload incluídos para melhor cache coalescing (doc AeroScrape v3.8).
-   * `includeScripts: false` ativa o fast path single-pass do AeroScrape.
+   * Headers do payload incluídos para melhor cache coalescing (doc NexusProxy v3.8).
+   * `includeScripts: false` ativa o fast path single-pass do NexusProxy.
    */
-  private static async _fetchViaAeroScrape<T>(
+  private static async _fetchViaNexusProxy<T>(
     source: ScrapeSource<T>,
     cb: CircuitBreaker,
   ): Promise<{ data: Partial<T>; bytes: number; earlyAbort: boolean; cacheStatus: string }> {
-    const aeroUrl = this._getAeroUrl();
-    const targetUA = this._getAeroTargetUA();
+    const nexusProxyUrl = this._getNexusProxyUrl();
+    const targetUA = this._getNexusProxyTargetUA();
 
     const ctrl  = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), this._options.aeroScrapeTimeoutMs);
+    const timer = setTimeout(() => ctrl.abort(), this._options.nexusProxyTimeoutMs);
 
     try {
-      const res = await fetch(aeroUrl, {
+      const res = await fetch(nexusProxyUrl, {
         method: 'POST',
         signal: ctrl.signal,
         headers: { 'Content-Type': 'application/json' },
@@ -1581,20 +1613,21 @@ export class NexusEngineUltra {
           cacheTtl:       900_000,    // 15 min — balanceia frescor e cache hit rate
           headers: {
             'User-Agent': targetUA,
-            'X-Cache-Version': AEROSCRAPE_CACHE_VERSION,
+            'X-Cache-Version': NEXUS_PROXY_CACHE_VERSION,
           },
         }),
       });
       clearTimeout(timer);
 
-      if (!res.ok) throw new Error(`AeroScrape HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`NexusProxy HTTP ${res.status}`);
       const json = await res.json();
 
-      if (!json.success || !json.html) {
-        throw new Error(`AeroScrape: success=false ou html ausente`);
+      const html = json.html || json.data;
+
+      if (!html) {
+        throw new Error(`NexusProxy: html ausente na resposta`);
       }
 
-      const html    = json.html as string;
       const rawData = universalLexer<T>(html, source.template, {});
       const parsed  = source.template.schema.safeParse(rawData);
 
@@ -1715,7 +1748,7 @@ export class NexusEngineUltra {
     throw new Error(`Falha total: ${lastErr.message}`);
   }
 
-  // ── _streamAndParse: AeroScrape primeiro, fallback para streaming direto ──
+  // ── _streamAndParse: NexusProxy primeiro, fallback para streaming direto ──
 
   private static async _streamAndParse<T>(
     source: ScrapeSource<T>,
@@ -1723,18 +1756,18 @@ export class NexusEngineUltra {
   ): Promise<{ data: Partial<T>; bytes: number; earlyAbort: boolean }> {
 
     /**
-     * NOVO v16 — Tenta AeroScrape primeiro se configurado.
-     * O AeroScrape tem seu próprio CB ('aeroscrape'). Se falhar, cai para fetch direto.
+     * NOVO v16 — Tenta NexusProxy primeiro se configurado.
+     * O NexusProxy tem seu próprio CB ('nexusproxy'). Se falhar, cai para fetch direto.
      * Vantagens: cache ETag/SWR, bypass WAF, coalescing, métricas separadas.
      */
-    if (this._options.useAeroScrape) {
-      const aeroCB = this.getCB('aeroscrape');
-      if (!aeroCB.isOpen()) {
+    if (this._options.useNexusProxy) {
+      const proxyCB = this.getCB('nexusproxy');
+      if (!proxyCB.isOpen()) {
         try {
-          const aeroResult = await this._fetchViaAeroScrape<T>(source, aeroCB);
-          return { data: aeroResult.data, bytes: aeroResult.bytes, earlyAbort: aeroResult.earlyAbort };
-        } catch (aeroErr) {
-          console.warn(`[Nexus Engine] AeroScrape falhou para ${source.url}. Caindo para fetch direto:`, (aeroErr as Error).message);
+          const proxyResult = await this._fetchViaNexusProxy<T>(source, proxyCB);
+          return { data: proxyResult.data, bytes: proxyResult.bytes, earlyAbort: proxyResult.earlyAbort };
+        } catch (proxyErr) {
+          console.warn(`[Nexus Engine] NexusProxy falhou para ${source.url}. Caindo para fetch direto:`, (proxyErr as Error).message);
           // Continua para o fetch direto abaixo
         }
       }
@@ -1946,31 +1979,39 @@ export class NexusEngineUltra {
     return { data: r.results, bytes: r.metrics.bytesProcessed, earlyAbort: r.metrics.earlyAbort, cacheStatus: r.cacheStatus };
   }
 
-  // ── fetchAtivosBatch: batch via AeroScrape (NOVO v16) ────────────────────
+  // ── fetchAtivosBatch: batch via NexusProxy (NOVO v16) ────────────────────
 
   /**
    * NOVO v16 — Fetcha múltiplos ativos em uma única chamada ao endpoint
-   * /api/batch-scrape do AeroScrape (até 25 jobs, concorrência até 8).
+   * /api/batch-scrape do NexusProxy (até 25 jobs, concorrência até 8).
    *
-   * Se AeroScrape não estiver habilitado, cai automaticamente para executeBatch
+   * Se NexusProxy não estiver habilitado, cai automaticamente para executeBatch
    * com chamadas individuais — mesma interface, zero breaking changes.
    *
    * Coalescing: jobs com a mesma URL compartilham o mesmo fetch no servidor
-   * AeroScrape, reduzindo drasticamente o overhead para carteiras grandes.
+   * NexusProxy, reduzindo drasticamente o overhead para carteiras grandes.
    */
   static async fetchAtivosBatch(
     ativos: { ticker: string; type: ExtendedAssetType }[],
     includeNews = false,
   ): Promise<any[]> {
-    if (!this._options.useAeroScrape) {
+    const nexusProxyBatchUrl = this._getNexusProxyBatchUrl();
+
+    // Se for o proxy Valorae, ele ainda não suporta batch nativamente, então pulamos para o fallback
+    if (this._options.useNexusProxy && nexusProxyBatchUrl.includes('valorae-proxy')) {
+      return this.executeBatch(
+        ativos.map(({ ticker, type }) => () => this.fetchAtivo(ticker, type, includeNews))
+      );
+    }
+
+    if (!this._options.useNexusProxy) {
       // Fallback para executeBatch individual
       return this.executeBatch(
         ativos.map(({ ticker, type }) => () => this.fetchAtivo(ticker, type, includeNews))
       );
     }
 
-    const aeroBatchUrl = this._getAeroBatchUrl();
-    const targetUA     = this._getAeroTargetUA();
+    const targetUA     = this._getNexusProxyTargetUA();
 
     // Monta jobs para o batch — 2 fontes por ativo (i10 + SI)
     const jobs = ativos.flatMap(({ ticker, type }) => {
@@ -1984,7 +2025,7 @@ export class NexusEngineUltra {
           returnHtml:     true,
           includeScripts: false,
           cacheTtl:       900_000,
-          headers:        { 'User-Agent': targetUA, 'X-Cache-Version': AEROSCRAPE_CACHE_VERSION },
+          headers:        { 'User-Agent': targetUA, 'X-Cache-Version': NEXUS_PROXY_CACHE_VERSION },
         },
         {
           id:             `${clean}_si`,
@@ -1992,38 +2033,38 @@ export class NexusEngineUltra {
           returnHtml:     true,
           includeScripts: false,
           cacheTtl:       900_000,
-          headers:        { 'User-Agent': targetUA, 'X-Cache-Version': AEROSCRAPE_CACHE_VERSION },
+          headers:        { 'User-Agent': targetUA, 'X-Cache-Version': NEXUS_PROXY_CACHE_VERSION },
         },
       ];
     });
 
-    // AeroScrape limita a 25 jobs por batch
+    // NexusProxy limita a 25 jobs por batch
     const BATCH_LIMIT = 25;
     if (jobs.length > BATCH_LIMIT) {
       console.warn(`[Nexus] batch de ${jobs.length} jobs excede limite de ${BATCH_LIMIT}. Dividindo em sub-batches.`);
       const chunks: typeof jobs[] = [];
       for (let i = 0; i < jobs.length; i += BATCH_LIMIT) chunks.push(jobs.slice(i, i + BATCH_LIMIT));
 
-      const allResults = await Promise.all(chunks.map(chunk => this._sendAeroBatch(chunk, aeroBatchUrl)));
+      const allResults = await Promise.all(chunks.map(chunk => this._sendNexusProxyBatch(chunk, nexusProxyBatchUrl)));
       const flatResults = allResults.flat();
       return this._processBatchResults(ativos, flatResults, includeNews);
     }
 
     try {
-      const batchResults = await this._sendAeroBatch(jobs, aeroBatchUrl);
+      const batchResults = await this._sendNexusProxyBatch(jobs, nexusProxyBatchUrl);
       return this._processBatchResults(ativos, batchResults, includeNews);
     } catch (err) {
-      console.warn('[Nexus] AeroScrape batch falhou, caindo para executeBatch individual:', (err as Error).message);
+      console.warn('[Nexus] NexusProxy batch falhou, caindo para executeBatch individual:', (err as Error).message);
       return this.executeBatch(
         ativos.map(({ ticker, type }) => () => this.fetchAtivo(ticker, type, includeNews))
       );
     }
   }
 
-  /** Envia um sub-batch ao AeroScrape e retorna os resultados. */
-  private static async _sendAeroBatch(jobs: any[], url: string): Promise<any[]> {
+  /** Envia um sub-batch ao NexusProxy e retorna os resultados. */
+  private static async _sendNexusProxyBatch(jobs: any[], url: string): Promise<any[]> {
     const ctrl  = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), this._options.aeroScrapeTimeoutMs * 2);
+    const timer = setTimeout(() => ctrl.abort(), this._options.nexusProxyTimeoutMs * 2);
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -2032,7 +2073,7 @@ export class NexusEngineUltra {
         body: JSON.stringify({ jobs, concurrency: 8 }),
       });
       clearTimeout(timer);
-      if (!res.ok) throw new Error(`AeroScrape batch HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`NexusProxy batch HTTP ${res.status}`);
       const json = await res.json();
       return (json.results ?? []) as any[];
     } finally {
@@ -2083,7 +2124,7 @@ export class NexusEngineUltra {
         metrics: {
           foundKeys:   Object.keys(combined),
           successRate: Object.keys(combined).length / preset.template.rules.length,
-          source:      'AeroScrape Batch',
+          source:      'NexusProxy Batch',
         },
       };
     }));
@@ -2172,6 +2213,37 @@ export class NexusEngineUltra {
         (q: any) => q.exchange === 'SAO' || q.exchange === 'BVMF' || q.symbol?.endsWith('.SA')
       );
     } catch {
+      // Fallback para DuckDuckGo Lite scraper
+      try {
+        const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query + ' acao b3 fundo')}`;
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), this._options.fetchTimeoutMs);
+        const fetchOpts: any = { signal: ctrl.signal, headers: { 'User-Agent': getRandomAgent() } };
+        if (this._options.fetchDispatcher) fetchOpts.dispatcher = this._options.fetchDispatcher;
+        const res = await fetch(ddgUrl, fetchOpts);
+        clearTimeout(timer);
+        if (res.ok) {
+          const html = await res.text();
+          const regex = /<a class="result__url" href="[^"]*">([^<]+)<\/a>/g;
+          let match;
+          const results = [];
+          while ((match = regex.exec(html)) !== null && results.length < 5) {
+            const urlStr = match[1].trim();
+            // Tenta extrair o ticker da url (ex: investidor10.com.br/acoes/petr4/)
+            const tMatch = urlStr.match(/\/(?:acoes|fiis|stocks|bdrs|etfs)\/([A-Z0-9]{4,6})/i);
+            if (tMatch) {
+              results.push({
+                symbol: tMatch[1].toUpperCase() + '.SA',
+                shortname: tMatch[1].toUpperCase(),
+                exchange: 'BVMF'
+              });
+            }
+          }
+          if (results.length > 0) return results;
+        }
+      } catch (e) {
+        // Ignora erro no fallback
+      }
       return [];
     }
   }
@@ -2189,7 +2261,9 @@ export class NexusEngineUltra {
       const ctrl  = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), this._options.fetchTimeoutMs);
       try {
-        const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': getRandomAgent() } });
+        const fetchOpts: any = { signal: ctrl.signal, headers: { 'User-Agent': getRandomAgent() } };
+        if (this._options.fetchDispatcher) fetchOpts.dispatcher = this._options.fetchDispatcher;
+        const res = await fetch(url, fetchOpts);
         clearTimeout(timer);
         if (!res.ok) return [];
         const xml = await res.text();
@@ -2290,7 +2364,7 @@ export class NexusEngineUltra {
       circuitBreakers:  Object.keys(cbMetrics).length > 0 ? cbMetrics : {
         investidor10: { estado: 'FECHADO' as CBState, falhas: 0 },
         statusinvest: { estado: 'FECHADO' as CBState, falhas: 0 },
-        aeroscrape:   { estado: 'FECHADO' as CBState, falhas: 0 },
+        nexusproxy:   { estado: 'FECHADO' as CBState, falhas: 0 },
       },
     };
   }
@@ -2315,8 +2389,8 @@ export class NexusEngineUltra {
         'Regex de Modo Multiple Cacheada',
         'User-Agents Chrome 136+ / Firefox 138+ (v16)',
         'CPU Metrics Reais via process.cpuUsage()',
-        'AeroScrape API v3.8 como Camada Primária Configurável (v16)',
-        'AeroScrape Batch com Coalescing e Sub-batching Automático (v16)',
+        'NexusProxy API v3.8 como Camada Primária Configurável (v16)',
+        'NexusProxy Batch com Coalescing e Sub-batching Automático (v16)',
         'normalizeBRNumber com Sufixos PT-BR (Bilhões/Milhões/Trilhões) (v16)',
         'B3Schema expandido: 50+ campos (fundamentos, endividamento, info, dividendos) (v16)',
         'FIISchema expandido: yield 1M-12M, vacância, magic number, info do fundo (v16)',
@@ -2336,8 +2410,8 @@ export class NexusEngineUltra {
 
 /**
  * runNexusBatch respects the parameter `type` and preserves incoming order.
- * NOVO v16: when useAeroScrape=true, delegates to fetchAtivosBatch to
- * leverage batch coalescing of AeroScrape v3.8.
+ * NOVO v16: when useNexusProxy=true, delegates to fetchAtivosBatch to
+ * leverage batch coalescing of NexusProxy v3.8.
  */
 export async function runNexusBatch(
   tickers:      string[],
@@ -2345,8 +2419,8 @@ export async function runNexusBatch(
   _opts?:       any,
   includeNews?: boolean,
 ): Promise<any[]> {
-  // If useAeroScrape is true, delegate to fetchAtivosBatch
-  if ((NexusEngineUltra as any)._options?.useAeroScrape) {
+  // If useNexusProxy is true, delegate to fetchAtivosBatch
+  if ((NexusEngineUltra as any)._options?.useNexusProxy) {
     return NexusEngineUltra.fetchAtivosBatch(
       tickers.map(ticker => ({ ticker, type })),
       includeNews,
@@ -2405,7 +2479,7 @@ export async function runNexusBatchAuto(
 
 /**
  * NOVO v16 — fetchAtivosBatch: high-level mixed portfolio batch API.
- * Uses AeroScrape batch when available with automatic fallback.
+ * Uses NexusProxy batch when available with automatic fallback.
  */
 export async function fetchAtivosBatch(
   ativos:       { ticker: string; type: ExtendedAssetType }[],

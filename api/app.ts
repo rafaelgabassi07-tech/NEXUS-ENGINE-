@@ -33,14 +33,17 @@ function saveToHistory(results: any[], type: string) {
     const now = new Date().toISOString();
     results.forEach((item: any) => {
       if (item && item.results && !item.error) {
-        const precoStr = item.results.precoAtual || item.results.preco || "0";
-        const preco = parseFloat(precoStr.replace("R$", "").replace(".", "").replace(",", ".").trim()) || 0;
-        const dyStr = item.results.dividendYield || "0";
-        const dy = parseFloat(dyStr.replace("%", "").replace(",", ".").trim()) || 0;
-        const plStr = item.results.pl || "0";
-        const pl = parseFloat(plStr.replace(",", ".").trim()) || 0;
-        const pvpStr = item.results.pvp || "0";
-        const pvp = parseFloat(pvpStr.replace(",", ".").trim()) || 0;
+        const precoval = item.results.precoAtual || item.results.preco || 0;
+        const preco = typeof precoval === 'number' ? precoval : (parseFloat(String(precoval).replace("R$", "").replace(".", "").replace(",", ".").trim()) || 0);
+        
+        const dyval = item.results.dividendYield || item.results.dy12m || "0";
+        const dy = typeof dyval === 'number' ? dyval : (parseFloat(String(dyval).replace("%", "").replace(".", "").replace(",", ".").trim()) || 0);
+        
+        const plval = item.results.pl || "0";
+        const pl = typeof plval === 'number' ? plval : (parseFloat(String(plval).replace(".", "").replace(",", ".").trim()) || 0);
+        
+        const pvpval = item.results.pvp || "0";
+        const pvp = typeof pvpval === 'number' ? pvpval : (parseFloat(String(pvpval).replace(".", "").replace(",", ".").trim()) || 0);
 
         history.push({
           timestamp: now,
@@ -103,6 +106,21 @@ app.get("/api/readme", (req, res) => {
   }
 });
 
+app.get("/api/logs", (req, res) => {
+  try {
+    const logPath = path.join(process.cwd(), "requests.log");
+    if (fs.existsSync(logPath)) {
+      const content = fs.readFileSync(logPath, "utf-8");
+      res.json({ logs: content });
+    } else {
+      res.json({ logs: "" });
+    }
+  } catch (error: any) {
+    console.error(`[API] Logs error: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get("/api/history", (req, res) => {
   try {
     if (fs.existsSync(HISTORY_FILE)) {
@@ -144,7 +162,7 @@ app.use("/api/*", (req, res) => {
     error: "API Route not found", 
     method: req.method, 
     url: req.originalUrl,
-    availableRoutes: ["GET /api/health", "POST /api/scrape", "GET /api/readme", "GET /api/history"]
+    availableRoutes: ["GET /api/health", "POST /api/scrape", "GET /api/readme", "GET /api/history", "GET /api/logs"]
   });
 });
 
