@@ -134,6 +134,15 @@ jobs:
           godot --headless --path game --export-debug "Android" build/android/NexusFootball3D.apk 2>&1 | tee godot-export.log
           test -s game/build/android/NexusFootball3D.apk
 
+      - name: Upload export diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NexusFootball3D-export-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
+          path: godot-export.log
+
       - name: Verify APK package, architecture and signature
         shell: bash
         run: |
