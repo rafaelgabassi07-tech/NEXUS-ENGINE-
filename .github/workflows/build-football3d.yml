@@ -24,7 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(find source_chunks -maxdepth 1 -type f -name 'part-*.b64' | wc -l)" -eq 9
+          test "$(find source_chunks -maxdepth 1 -type f -name 'part-*.b64' | wc -l)" -eq 11
           cat source_chunks/part-*.b64 > /tmp/NexusFootball3D.b64
           base64 --decode /tmp/NexusFootball3D.b64 > /tmp/NexusFootball3D_Godot462_source_AI_STUDIO_ROOT_OK.zip
           echo "a76d578ba6e45ca46b37c8224bf550a9b2bd1c700d435b89032723a3513b78a9  /tmp/NexusFootball3D_Godot462_source_AI_STUDIO_ROOT_OK.zip" | sha256sum --check --strict
