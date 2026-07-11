@@ -1,0 +1,173 @@
+name: Build Nexus Football 3D APK
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-export:
+    name: Test and export Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Reconstruct and verify source project
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find source_chunks -maxdepth 1 -type f -name 'part-*.b64' | wc -l)" -eq 11
+          cat source_chunks/part-*.b64 > /tmp/NexusFootball3D.b64
+          base64 --decode /tmp/NexusFootball3D.b64 > /tmp/NexusFootball3D_Godot462_source_AI_STUDIO_ROOT_OK.zip
+          echo "a76d578ba6e45ca46b37c8224bf550a9b2bd1c700d435b89032723a3513b78a9  /tmp/NexusFootball3D_Godot462_source_AI_STUDIO_ROOT_OK.zip" | sha256sum --check --strict
+          unzip -t /tmp/NexusFootball3D_Godot462_source_AI_STUDIO_ROOT_OK.zip >/dev/null
+          rm -rf game
+          mkdir -p game
+          unzip -q /tmp/NexusFootball3D_Godot462_source_AI_STUDIO_ROOT_OK.zip -d game
+          test -f game/project.godot
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android packages
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "build-tools;35.0.1" \
+            "platforms;android-35" \
+            "cmdline-tools;latest"
+
+      - name: Install Godot 4.6.2 stable
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 5 --retry-all-errors \
+            --output /tmp/godot.zip \
+            "https://github.com/godotengine/godot-builds/releases/download/4.6.2-stable/Godot_v4.6.2-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          GODOT_BIN="$(find /tmp/godot -maxdepth 1 -type f -name 'Godot*' | head -n 1)"
+          test -n "$GODOT_BIN"
+          chmod +x "$GODOT_BIN"
+          sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
+          godot --version
+
+      - name: Install official export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 5 --retry-all-errors \
+            --output /tmp/templates.tpz \
+            "https://github.com/godotengine/godot-builds/releases/download/4.6.2-stable/Godot_v4.6.2-stable_export_templates.tpz"
+          rm -rf /tmp/godot-templates
+          mkdir -p /tmp/godot-templates
+          unzip -q /tmp/templates.tpz -d /tmp/godot-templates
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.6.2.stable"
+          cp -R /tmp/godot-templates/templates/. "$HOME/.local/share/godot/export_templates/4.6.2.stable/"
+          test -f "$HOME/.local/share/godot/export_templates/4.6.2.stable/android_debug.apk"
+
+      - name: Configure Android paths and debug signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/godot" "$HOME/.android"
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "${ANDROID_HOME}"
+          export/android/java_sdk_path = "${JAVA_HOME}"
+          EOF
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA -keysize 2048 -validity 10000
+          fi
+
+      - name: Validate project import and scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --editor --path game --quit-after 3 2>&1 | tee godot-import.log
+          ! grep -E "SCRIPT ERROR|Parse Error|ERROR: Failed loading" godot-import.log
+
+      - name: Upload import diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NexusFootball3D-import-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
+          path: godot-import.log
+
+      - name: Run deterministic game tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path game --script res://scripts/tests/test_runner.gd 2>&1 | tee godot-tests.log
+          grep -F "[TEST] 7 suites passed" godot-tests.log
+
+      - name: Export signed arm64 debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p game/build/android
+          godot --headless --path game --export-debug "Android" build/android/NexusFootball3D.apk 2>&1 | tee godot-export.log
+          test -s game/build/android/NexusFootball3D.apk
+
+      - name: Upload export diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NexusFootball3D-export-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
+          path: godot-export.log
+
+      - name: Verify APK package, architecture and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=game/build/android/NexusFootball3D.apk
+          unzip -t "$APK" >/dev/null
+          "${ANDROID_HOME}/build-tools/35.0.1/aapt" dump badging "$APK" | tee apk-badging.txt
+          grep -F "package: name='com.aigoogle.nexusfootball3d'" apk-badging.txt
+          unzip -l "$APK" | tee apk-files.txt
+          grep -F "lib/arm64-v8a/libgodot_android.so" apk-files.txt
+          "${ANDROID_HOME}/build-tools/35.0.1/apksigner" verify --verbose --print-certs "$APK" | tee apk-signature.txt
+          sha256sum "$APK" | tee game/build/android/NexusFootball3D.apk.sha256
+
+      - name: Upload installable APK and validation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: NexusFootball3D-Android-arm64-debug
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            game/build/android/NexusFootball3D.apk
+            game/build/android/NexusFootball3D.apk.sha256
+            /tmp/NexusFootball3D_Godot462_source_AI_STUDIO_ROOT_OK.zip
+            godot-import.log
+            godot-tests.log
+            godot-export.log
+            apk-badging.txt
+            apk-signature.txt
