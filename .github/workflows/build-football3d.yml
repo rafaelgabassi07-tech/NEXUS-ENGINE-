@@ -20,13 +20,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Extract source project
+      - name: Reconstruct and verify source project
         shell: bash
         run: |
           set -euo pipefail
+          test "$(find source_chunks -maxdepth 1 -type f -name 'part-*.b64' | wc -l)" -eq 9
+          cat source_chunks/part-*.b64 > /tmp/NexusFootball3D.b64
+          base64 --decode /tmp/NexusFootball3D.b64 > /tmp/NexusFootball3D_Godot462_source_AI_STUDIO_ROOT_OK.zip
+          echo "a76d578ba6e45ca46b37c8224bf550a9b2bd1c700d435b89032723a3513b78a9  /tmp/NexusFootball3D_Godot462_source_AI_STUDIO_ROOT_OK.zip" | sha256sum --check --strict
+          unzip -t /tmp/NexusFootball3D_Godot462_source_AI_STUDIO_ROOT_OK.zip >/dev/null
           rm -rf game
           mkdir -p game
-          unzip -q NexusFootball3D_Godot462_source_AI_STUDIO_ROOT_OK.zip -d game
+          unzip -q /tmp/NexusFootball3D_Godot462_source_AI_STUDIO_ROOT_OK.zip -d game
           test -f game/project.godot
 
       - name: Set up Java 17
@@ -142,6 +147,7 @@ jobs:
           path: |
             game/build/android/NexusFootball3D.apk
             game/build/android/NexusFootball3D.apk.sha256
+            /tmp/NexusFootball3D_Godot462_source_AI_STUDIO_ROOT_OK.zip
             godot-import.log
             godot-tests.log
             godot-export.log

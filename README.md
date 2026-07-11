@@ -1,12 +1,18 @@
 # Nexus Football 3D
 
-Projeto de futebol 3D mobile para Android, desenvolvido em Godot 4.6.2 estável.
+Jogo de futebol 3D mobile para Android, desenvolvido em Godot 4.6.2 estável.
 
-## Entregas no repositório
+## Estrutura do repositório
 
-- `NexusFootball3D_Godot462_source_AI_STUDIO_ROOT_OK.zip`: projeto-fonte completo, com `project.godot` diretamente na raiz do ZIP.
-- `.github/workflows/build-football3d.yml`: pipeline que importa o projeto, executa testes, compila, assina e verifica o APK arm64.
-- `LICENSE`: licença do código do projeto.
+- `source_chunks/`: projeto-fonte compactado e armazenado em nove segmentos Base64 verificáveis.
+- `.github/workflows/build-football3d.yml`: reconstrói o projeto, confirma seu SHA-256, importa, testa, compila, assina e audita o APK arm64.
+- `LICENSE`: licença MIT do código do projeto.
+
+O ZIP reconstruído contém `project.godot` diretamente na raiz. Seu SHA-256 esperado é:
+
+```text
+a76d578ba6e45ca46b37c8224bf550a9b2bd1c700d435b89032723a3513b78a9
+```
 
 ## Conteúdo da versão 0.1.1
 
@@ -18,12 +24,17 @@ Projeto de futebol 3D mobile para Android, desenvolvido em Godot 4.6.2 estável.
 - câmera broadcast e estádio procedural;
 - qualidade gráfica adaptativa por FPS;
 - renderer Mobile/Vulkan com fallback OpenGL;
-- testes determinísticos e validação estrutural do APK.
+- sete suítes determinísticas e validação estrutural do APK.
 
-## APK
+## Artefato Android
 
-Cada execução bem-sucedida do workflow publica o artefato `NexusFootball3D-Android-arm64-debug`, contendo o APK instalável, SHA-256 e logs de validação.
+Cada execução bem-sucedida do workflow publica `NexusFootball3D-Android-arm64-debug`, contendo:
 
-## Escopo
+- `NexusFootball3D.apk` instalável;
+- hash SHA-256 do APK;
+- ZIP integral do projeto-fonte;
+- logs de importação, testes, exportação, manifesto e assinatura.
 
-Esta versão é uma vertical slice jogável. Não inclui licenças de clubes, atletas reais, multiplayer, modo carreira, narração ou assets AAA.
+## Escopo real
+
+Esta versão é uma vertical slice jogável e tecnicamente extensível. Não inclui licenças de clubes ou atletas, multiplayer, modo carreira, narração, captura de movimento ou pacote artístico AAA.
