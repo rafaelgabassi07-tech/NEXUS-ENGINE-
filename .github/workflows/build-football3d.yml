@@ -110,6 +110,15 @@ jobs:
           godot --headless --editor --path game --quit-after 3 2>&1 | tee godot-import.log
           ! grep -E "SCRIPT ERROR|Parse Error|ERROR: Failed loading" godot-import.log
 
+      - name: Upload import diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NexusFootball3D-import-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
+          path: godot-import.log
+
       - name: Run deterministic game tests
         shell: bash
         run: |
